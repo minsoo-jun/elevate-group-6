@@ -127,6 +127,23 @@ a:hover { text-decoration: underline; }
   width: 100vw;
 }
 
+/* やり取りのみモード: Agent内部の動きやコードを非表示にし、対話UIに専念 */
+.app[data-view-mode="chat"] {
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+}
+.app[data-view-mode="chat"] .msg__trace {
+  display: none !important;
+}
+.app[data-view-mode="chat"] .panel {
+  display: none !important;
+}
+.app[data-view-mode="chat"] .panel-toggle {
+  display: none !important;
+}
+.app[data-view-mode="chat"] .stream__inner {
+  max-width: 820px;
+}
+
 /* ============================================================
    Left Rail — Identity + Scenarios
    ============================================================ */
@@ -357,6 +374,61 @@ a:hover { text-decoration: underline; }
   font-size: 11px;
   color: var(--fg-subtle);
   line-height: 1.35;
+}
+
+/* View Mode Switcher (やり取り vs 現在のUI) */
+.view-switch {
+  display: inline-flex;
+  align-items: center;
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-md);
+  padding: 3px;
+  gap: 3px;
+}
+
+.view-switch__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: calc(var(--r-md) - 2px);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all 0.16s var(--ease);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.view-switch__tab:hover {
+  color: var(--fg-strong);
+  background: var(--bg-surface);
+}
+
+.view-switch__tab[aria-selected="true"] {
+  background: var(--bg-surface);
+  color: var(--brand-700);
+  font-weight: 650;
+  box-shadow: var(--shadow-sm);
+}
+
+.view-switch__tab svg {
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+
+.view-switch__tab[aria-selected="true"] svg {
+  stroke: var(--brand-600);
+}
+
+@media (max-width: 860px) {
+  .view-switch__tab span { display: none; }
+  .view-switch__tab { padding: 0 8px; }
 }
 
 .chat__actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }

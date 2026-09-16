@@ -721,4 +721,35 @@ $('panelToggle').onclick = () => {
   p.dataset.open = p.dataset.open === 'true' ? 'false' : 'true';
 };
 
+/* ────────────────────────────── View Mode (やり取り vs 現在のUI) ────────────────────────────── */
+
+function setViewMode(mode) {
+  const app = document.querySelector('.app');
+  if (app) app.dataset.viewMode = mode;
+  const isChat = mode === 'chat';
+  const chatTab = $('viewTabChat');
+  const fullTab = $('viewTabFull');
+  if (chatTab) chatTab.setAttribute('aria-selected', String(isChat));
+  if (fullTab) fullTab.setAttribute('aria-selected', String(!isChat));
+  try {
+    localStorage.setItem('hr_concierge_view_mode', mode);
+  } catch (_) {}
+}
+
+function initViewMode() {
+  const chatTab = $('viewTabChat');
+  const fullTab = $('viewTabFull');
+  if (chatTab) chatTab.onclick = () => setViewMode('chat');
+  if (fullTab) fullTab.onclick = () => setViewMode('full');
+
+  let initial = 'chat';
+  try {
+    const saved = localStorage.getItem('hr_concierge_view_mode');
+    if (saved === 'chat' || saved === 'full') initial = saved;
+  } catch (_) {}
+  setViewMode(initial);
+}
+
+initViewMode();
 bootstrap();
+
