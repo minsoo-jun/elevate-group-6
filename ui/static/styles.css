@@ -489,7 +489,7 @@ a:hover { text-decoration: underline; }
 .stream {
   flex: 1;
   overflow-y: auto;
-  padding: 26px 22px 12px;
+  padding: 26px 22px 48px;
   min-height: 0;
   scroll-behavior: smooth;
 }
@@ -814,15 +814,16 @@ a:hover { text-decoration: underline; }
 .verdict--ERROR { background: var(--deny-100); border-color: var(--deny-border); color: var(--deny-700); }
 .verdict--ROLLBACK { background: hsl(280 60% 97%); border-color: hsl(280 40% 86%); color: hsl(280 52% 34%); }
 .verdict--SERVICE_UNAVAILABLE { background: var(--warn-100); border-color: var(--warn-border); color: var(--warn-700); }
+.verdict--SUCCESS { background: var(--ok-100); border-color: var(--ok-border); color: var(--ok-700); }
 
 /* HITL confirmation card (Principle P3) */
 .hitl {
-  border: 1px solid var(--warn-border);
+  border: 1.5px solid var(--warn-border);
   background: linear-gradient(180deg, var(--warn-100), hsl(38 92% 97%));
   border-radius: var(--r-lg);
-  padding: 15px 16px;
-  margin-top: 12px;
-  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  margin-top: 14px;
+  box-shadow: var(--shadow-md);
   animation: fadeUp 0.34s var(--ease-spring) both;
 }
 
@@ -830,11 +831,24 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 680;
   color: var(--warn-700);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   letter-spacing: -0.005em;
+  flex-wrap: wrap;
+}
+
+.hitl__badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  background: var(--warn-200, hsl(38 90% 85%));
+  color: var(--warn-800, hsl(32 60% 25%));
+  border: 1px solid var(--warn-border);
+  letter-spacing: 0.02em;
 }
 
 .hitl__sub { font-size: 11.5px; color: hsl(32 42% 38%); line-height: 1.55; margin-bottom: 11px; }

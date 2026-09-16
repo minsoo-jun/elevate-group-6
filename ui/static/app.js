@@ -248,13 +248,15 @@ function addHitlCard(host, payload) {
   const card = el('div', 'hitl');
   card.innerHTML = `
     <div class="hitl__head">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M8 1.5 14.5 5v6L8 14.5 1.5 11V5z"/><path d="M8 5.6v3M8 10.6h.01"/>
       </svg>
-      実行前の本人確認が必要です
+      <span>実行前の本人確認が必要です</span>
+      <span class="hitl__badge">⚠️ 未反映・承認待ち</span>
     </div>
     <p class="hitl__sub">
-      すべての業務ガードレールを通過しました。以下の内容で <strong>${esc(payload.system)}</strong> を更新します。内容を確認のうえ承認してください。
+      すべての業務ガードレールを通過しました。<strong>まだ ${esc(payload.system)} には登録されていません。</strong><br/>
+      以下の内容で問題なければ <strong>[承認して実行]</strong> を押してください。
     </p>
     <table class="hitl__table"><tbody>${rows}</tbody></table>
     <div class="hitl__actions">
@@ -277,6 +279,32 @@ function addHitlCard(host, payload) {
 
   host.appendChild(card);
   scrollDown();
+  requestAnimationFrame(() => {
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+}
+
+/* Success callout for completed write transactions */
+function addSuccessCallout(host, payload) {
+  if (payload.verdict !== 'SUCCESS' || payload.kind !== 'write') return;
+  const c = el('div', 'verdict verdict--SUCCESS');
+  c.innerHTML = `
+    <svg class="verdict__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13.5 4.5 6.5 11.5 2.5 7.5"/>
+    </svg>
+    <div class="verdict__body">
+      <div class="verdict__title">
+        ${esc(payload.system)} への反映が完了しました
+        <span class="tag tag--SUCCESS">反映完了</span>
+      </div>
+      <div>リモートの ${esc(payload.system)} サーバーへの書き込みリクエストが正常に完了しました。</div>
+      ${payload.audit_event_id ? `<div style="margin-top:4px;font-size:11px;color:var(--ok-700)">監査イベント: <code>${esc(payload.audit_event_id)}</code></div>` : ''}
+    </div>`;
+  host.appendChild(c);
+  scrollDown();
+  requestAnimationFrame(() => {
+    c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
 }
 
 function flatten(obj, prefix = '') {
@@ -390,6 +418,7 @@ async function send(text) {
           resolveTraceStep(stepsByTool[data.tool_name], data);
           addVerdictCallout(view.extras, data);
           addHitlCard(view.extras, data);
+          addSuccessCallout(view.extras, data);
         } else if (type === 'delta') {
           if (!started) { view.text.innerHTML = ''; started = true; }
           buffer += data.text;
