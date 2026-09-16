@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HR Concierge — Elevate APAC 人事・IT コンシェルジュ</title>
+<meta name="description" content="Elevate APAC 従業員向け HR・IT コンシェルジュ。就業規程 Q&A、WorkWeek 人事セルフサービス、ServiceImmediately IT サポートを引用付きで安全に提供します。" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;550;600;650;680;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23145c66'/><text x='16' y='22' font-size='15' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>HR</text></svg>" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ══════════════ Left Rail ══════════════ -->
+  <aside class="rail" id="rail">
+    <div class="rail__brand">
+      <div class="brand__mark" aria-hidden="true">HR</div>
+      <div class="brand__text">
+        <span class="brand__name">HR Concierge</span>
+        <span class="brand__sub">Elevate APAC</span>
+      </div>
+    </div>
+
+    <div class="rail__scroll">
+      <p class="rail__label">ログイン中の従業員</p>
+      <div class="identity" id="identityList" role="group" aria-label="テストユーザーの切り替え"></div>
+
+      <p class="rail__label">シナリオ例</p>
+      <div class="scenarios" id="scenarioList"></div>
+    </div>
+  </aside>
+
+  <!-- ══════════════ Center Chat ══════════════ -->
+  <main class="chat">
+    <header class="chat__header">
+      <button class="btn btn--ghost rail-toggle" id="railToggle" aria-label="メニューを開く">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+      </button>
+      <div class="chat__title">
+        <h1>人事・IT コンシェルジュ</h1>
+        <p id="headerSub">就業規程 Q&amp;A ・ WorkWeek ・ ServiceImmediately</p>
+      </div>
+      <div class="chat__actions">
+        <span class="chip chip--live"><i class="dot"></i>hr_concierge</span>
+        <button class="btn btn--ghost" id="resetBtn" title="デモ用の企業データと監査ログを初期化">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13.6 8a5.6 5.6 0 1 1-1.7-4"/><path d="M13.7 2.2v3.6h-3.6"/></svg>
+          初期化
+        </button>
+        <button class="btn btn--ghost panel-toggle" id="panelToggle" aria-label="ガバナンスパネルを開く">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 2v12M2.5 2h11a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="stream" id="stream">
+      <div class="stream__inner" id="streamInner">
+        <section class="welcome" id="welcome">
+          <p class="welcome__eyebrow">Grounded · Guardrailed · Auditable</p>
+          <h2>規程に根拠のある答えだけを返します。</h2>
+          <p>
+            就業規程の該当条文を引用付きで提示し、WorkWeek（人事）と ServiceImmediately（IT サービス管理）への
+            手続きは決定論的ガードレールと本人確認を通過したものだけを実行します。
+            左のシナリオ例から試せます。
+          </p>
+          <div class="capability-grid">
+            <article class="capability">
+              <div class="capability__head"><i class="dot dot--policy"></i>就業規程 Q&amp;A</div>
+              <p>ハンドブック 35 章から該当条文を検索し、<code>Section X.Y</code> のクリック可能な引用を付けて回答します。記載のない制度は推測せず「対象外」と答えます。</p>
+            </article>
+            <article class="capability">
+              <div class="capability__head"><i class="dot dot--hcm"></i>WorkWeek（人事）</div>
+              <p>休暇残高照会と休暇申請。残高上限・重複申請・TOIL 消化順序・診断書要否をツール層で検証します。</p>
+            </article>
+            <article class="capability">
+              <div class="capability__head"><i class="dot dot--itsm"></i>ServiceImmediately（IT）</div>
+              <p>チケット照会・起票・状態遷移。<code>New → Closed</code> の直接遷移や重複起票はガードレールが拒否します。</p>
+            </article>
+            <article class="capability">
+              <div class="capability__head"><i class="dot dot--saga"></i>システム横断処理</div>
+              <p>2 システムにまたがる手続きは Saga として実行し、途中で失敗した場合は自動で補償ロールバックします。</p>
+            </article>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="composer__inner">
+        <div class="composer__box">
+          <textarea id="input" rows="1" placeholder="就業規程や人事・IT の手続きについて質問してください…" aria-label="メッセージを入力"></textarea>
+          <button class="send" id="sendBtn" aria-label="送信" disabled>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 1.5 7.4 8.6M14.5 1.5l-4.6 13-2.5-5.9L1.5 6.1z"/></svg>
+          </button>
+        </div>
+        <div class="composer__meta">
+          <span id="composerHint"><kbd>Enter</kbd> で送信 · <kbd>Shift</kbd>+<kbd>Enter</kbd> で改行</span>
+          <span id="composerUser">EMP-1001 として実行中</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ══════════════ Right Panel ══════════════ -->
+  <aside class="panel" id="panel">
+    <nav class="panel__tabs" role="tablist" aria-label="ガバナンスインスペクタ">
+      <button class="tab" role="tab" id="tabWorkweek" data-view="workweek" aria-selected="true">WorkWeek</button>
+      <button class="tab" role="tab" id="tabItsm" data-view="itsm" aria-selected="false">ServiceImmediately</button>
+      <button class="tab" role="tab" id="tabAudit" data-view="audit" aria-selected="false">
+        監査 <span class="tab__badge" id="auditBadge">0</span>
+      </button>
+    </nav>
+
+    <div class="panel__scroll">
+      <section class="panel__view" data-view="workweek" data-active="true" role="tabpanel" aria-labelledby="tabWorkweek" id="viewWorkweek"></section>
+      <section class="panel__view" data-view="itsm" role="tabpanel" aria-labelledby="tabItsm" id="viewItsm"></section>
+      <section class="panel__view" data-view="audit" role="tabpanel" aria-labelledby="tabAudit" id="viewAudit"></section>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Citation Drawer (FR-5.3) -->
+<div class="drawer-scrim" id="drawerScrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" aria-label="規程条文の全文">
+  <header class="drawer__head">
+    <h3 id="drawerTitle">規程条文</h3>
+    <button class="drawer__close" id="drawerClose" aria-label="閉じる">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 4 4 12M4 4l8 8"/></svg>
+    </button>
+  </header>
+  <div class="drawer__body" id="drawerBody"></div>
+</aside>
+
+<div class="toast-host" id="toastHost"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

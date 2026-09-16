@@ -1,0 +1,23 @@
+---
+section_id: "Section 21.4"
+number: "21.4"
+title: "Family-Building and Transition Leaves"
+parent_section_id: "SECTION 21"
+parent_number: "21"
+parent_title: "GLOBAL LEAVES OVERVIEW"
+source: "elevate-apac-m3-policydoc.md"
+source_lines: "L719-L727"
+---
+
+# Section 21.4 — Family-Building and Transition Leaves
+
+**Parent:** SECTION 21: GLOBAL LEAVES OVERVIEW
+
+**21.4 Family-Building and Transition Leaves**
+
+* **Maternity Leave:** Maternity leave provides approximately 24 weeks at 100% pay for pregnancy, childbirth, and infant bonding.
+* **Baby Bonding Leave:** Baby bonding leave provides 18 weeks at 100% pay for the early care of a new child. This leave can be taken in one-week increments within the first year of the child's birth or adoption.
+* **Ramp-Back Time:** Ramp-back time provides 2 weeks at 100% pay, while only working 50% time, to help ease the transition back to work following maternity or baby bonding leave while balancing work and new childcare arrangements.
+  * To be eligible, you must take at least 10 or more consecutive weeks of bonding or maternity leave.
+  * Ramp-back time must be taken immediately upon your return to work.
+  * You can customize your working schedule for those 2 weeks as long as you work a minimum of 50% of your normal working hours.

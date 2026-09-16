@@ -1,0 +1,20 @@
+---
+section_id: "Section 23.2"
+number: "23.2"
+title: "Leave Allowance and Increments"
+parent_section_id: "SECTION 23"
+parent_number: "23"
+parent_title: "CARER'S LEAVE (GLOBAL)"
+source: "elevate-apac-m3-policydoc.md"
+source_lines: "L771-L776"
+---
+
+# Section 23.2 — Leave Allowance and Increments
+
+**Parent:** SECTION 23: CARER'S LEAVE (GLOBAL)
+
+**23.2 Leave Allowance and Increments**
+
+* **Duration:** You can take up to 8 weeks of paid leave for each loved one (family member, partners, and dependents) per lifetime for serious and terminal illnesses.
+* **Increments:** Leave is counted in work days based on your regular work schedule. You can request this leave in weekly blocks (a continuous period of time) or in daily schedules (for example, once per week for a period of time). The minimum duration is half a work day.
+* **Proration:** If you are part-time, your time off will be prorated according to your percentage FTE (for example, if you work 50% FTE, you can take up to 20 leave days).

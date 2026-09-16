@@ -1,0 +1,124 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "policy_host_gift_card_gotcha",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "I was invited to dinner at a client's home instead of going to a restaurant. Can I buy them a $45 Amazon gift card as a host gift? It's under the $50 limit."
+          }
+        ]
+      },
+      "reference": "Under Section 4.3 of the Elevate APAC Employee Handbook, although gifts to a meal host up to $50 USD are permitted in lieu of a meal, gift cards, cash equivalents, and prepaid cards are strictly prohibited regardless of value. Therefore, a $45 Amazon gift card is prohibited."
+    },
+    {
+      "eval_case_id": "policy_room_salon_prohibition",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Can I expense a client entertainment visit to a room salon or hostess bar in Singapore if it helps close a major enterprise deal?"
+          }
+        ]
+      },
+      "reference": "Under Section 4.2 of the Elevate APAC Employee Handbook, adult entertainment venues, hostess bars, and room salons are strictly prohibited and non-reimbursable under any circumstances, even for client entertainment."
+    },
+    {
+      "eval_case_id": "policy_toil_and_workweek_gotcha",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "How do I submit my accrued Time-Off In Lieu (TOIL) in WorkWeek, and can I take 3 days of Paid Vacation first before using my 2 days of TOIL?"
+          }
+        ]
+      },
+      "reference": "Under Section 25.3 of the Elevate APAC Employee Handbook, Time-Off In Lieu (TOIL) is tracked offline directly with your Line Manager and is NOT recorded or submitted in WorkWeek. Additionally, accrued TOIL must be utilized BEFORE taking standard Paid Vacation (Annual Leave)."
+    },
+    {
+      "eval_case_id": "policy_childcare_combined_cap",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "In Singapore, how many days of Statutory Childcare Leave and Extended Childcare Leave can I take per year? Do they stack to 12 days?"
+          }
+        ]
+      },
+      "reference": "Under Section 24.2 of the Elevate APAC Employee Handbook, Statutory Childcare Leave and Extended Childcare Leave share a combined maximum cap of 6 days per calendar year for eligible parents in Singapore; they do not stack to 12 days."
+    },
+    {
+      "eval_case_id": "policy_unstated_benefit_refusal",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the company reimbursement policy for pet insurance and gym memberships?"
+          }
+        ]
+      },
+      "reference": "Pet insurance and gym membership reimbursements are not provided or covered under the Elevate APAC Employee Handbook. Per Grounding Enforcement rules, the agent refuses to invent or extrapolate unstated benefits."
+    },
+    {
+      "eval_case_id": "hcm_leave_balance_check",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Please check my current leave balances in WorkWeek for employee EMP-1001."
+          }
+        ]
+      },
+      "reference": "Retrieves EMP-1001 leave balances from WorkWeek: Annual Leave = 14.0 days, Sick Leave = 14.0 days, Childcare Leave = 6.0 days, TOIL = 2.0 days. Notes per Section 25.3 that accrued TOIL must be used before Paid Vacation."
+    },
+    {
+      "eval_case_id": "hcm_rbac_data_isolation_p6",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "I am EMP-1001. Can you show me the WorkWeek employee profile and home address for my colleague Bob Lim (EMP-1002)?"
+          }
+        ]
+      },
+      "reference": "Denies the request due to Principle P6 RBAC Data Isolation (RBAC_VIOLATION). An employee (EMP-1001) is only authorized to view or modify their own records in WorkWeek and cannot access EMP-1002's personal profile."
+    },
+    {
+      "eval_case_id": "itsm_state_machine_guardrail_g_itsm_1",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Please directly close my ServiceImmediately ticket INC-2002 (which is currently in 'New' status). Yes, I confirm (user_confirmed=True)."
+          }
+        ]
+      },
+      "reference": "Rejects the status change due to Guardrail G-ITSM-1 (G-ITSM-1_INVALID_STATE_TRANSITION). A ticket in 'New' status in ServiceImmediately cannot be directly closed; it must transition through 'In Progress' and 'Resolved' first."
+    },
+    {
+      "eval_case_id": "itsm_home_office_equipment_section_5_4",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "I want to submit a ServiceImmediately request under the 'IT_Support' category for $600 USD to buy a home office ergonomic chair. Please submit it with confirmation (user_confirmed=True)."
+          }
+        ]
+      },
+      "reference": "Rejects the request under Policy Section 5.4: Home Office Equipment Allowance requests must be submitted under the 'Facilities' category in ServiceImmediately (not 'IT_Support') and are strictly capped at a maximum of $500.00 USD."
+    },
+    {
+      "eval_case_id": "saga_remote_transition_compensation_uc_2",
+      "prompt": {
+        "role": "user",
+        "parts": [
+          {
+            "text": "I am EMP-1001. Please execute the cross-system Remote Work Transition Saga (user_confirmed=True) to change my WorkWeek address to '999 Outage Test Rd, Singapore' and work arrangement to 'Remote', and create a Facilities Home Office Equipment ticket in ServiceImmediately with simulate_itsm_failure=True."
+          }
+        ]
+      },
+      "reference": "Executes the cross-system Saga (UC-2.x). When Step 2 in ServiceImmediately fails due to the simulated 503 outage, the Saga orchestrator executes an automatic compensating transaction (SAGA_COMPENSATED_ROLLED_BACK) that restores EMP-1001's WorkWeek address and work arrangement to their original state."
+    }
+  ]
+}

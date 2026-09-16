@@ -1,0 +1,25 @@
+---
+section_id: "Section 19.3"
+number: "19.3"
+title: "Hospitalization Leave"
+parent_section_id: "SECTION 19"
+parent_number: "19"
+parent_title: "SICK TIME & HOSPITALIZATION LEAVE (SINGAPORE)"
+source: "elevate-apac-m3-policydoc.md"
+source_lines: "L618-L626"
+---
+
+# Section 19.3 — Hospitalization Leave
+
+**Parent:** SECTION 19: SICK TIME & HOSPITALIZATION LEAVE (SINGAPORE)
+
+**19.3 Hospitalization Leave**
+
+Employees can use an additional 46 work days of hospitalization leave. To use this leave, you must contact support and meet one of the following criteria:
+
+1. You are warded in a hospital as an inpatient or for day surgery.
+2. You are under quarantine (whether or not in a hospital) under any written law.
+3. You are ill enough to require hospitalization during the leave period (must be certified by a medical practitioner).
+4. You need rest or further medical treatment during the leave period after discharging from a hospital (must be certified by a medical practitioner).
+* **Certification Requirements:** You must provide a sick certificate indicating the hospitalization leave period, issued by a registered medical practitioner who can admit patients into hospitals. For reasons (3) and (4) above, the certifying medical practitioner must be employed by a hospital approved by the Minister for Manpower; otherwise, the company reserves the right to request more information before approving the leave.
+* **Discretionary Approval:** Paid hospitalization leave is not an automatic extension of paid outpatient sick leave. It is discretionary, based on business approval, and granted on a case-by-case basis.
