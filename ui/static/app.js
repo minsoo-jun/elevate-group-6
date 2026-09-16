@@ -245,6 +245,21 @@ function addHitlCard(host, payload) {
     .map(([k, v]) => `<tr><th>${esc(labelize(k))}</th><td>${esc(v)}</td></tr>`)
     .join('');
 
+  const p = payload.proposal || {};
+  let confirmMsg = '承認します。上記内容を user_confirmed=True で直ちに実行・登録してください。';
+  if (p.start_date && p.end_date) {
+    const lt = LEAVE_JA[p.leave_type] || p.leave_type || '有給休暇';
+    confirmMsg = `【承認】${p.start_date}から${p.end_date}までの${p.days || ''}日間の${lt}申請を承認します。user_confirmed=True で WorkWeek への登録を実行してください。`;
+  } else if (p.request_id && (p.action === 'cancel' || String(p.status).includes('CANCEL'))) {
+    confirmMsg = `【承認】休暇申請 #${p.request_id} の取り消しを承認します。user_confirmed=True で cancel_leave_request を実行してください。`;
+  } else if (p.address || p.phone) {
+    confirmMsg = `【承認】連絡先情報の変更（住所: ${p.address || '変更なし'}, 電話番号: ${p.phone || '変更なし'}）を承認します。user_confirmed=True で更新を実行してください。`;
+  } else if (p.ticket_id && p.to_status) {
+    confirmMsg = `【承認】チケット ${p.ticket_id} のステータスを ${p.to_status} へ変更することを承認します。user_confirmed=True で実行してください。`;
+  } else if (p.title || p.short_description) {
+    confirmMsg = `【承認】チケット「${p.title || p.short_description}」（優先度: ${p.priority || ''}）の作成を承認します。user_confirmed=True で作成を実行してください。`;
+  }
+
   const card = el('div', 'hitl');
   card.innerHTML = `
     <div class="hitl__head">
@@ -268,11 +283,24 @@ function addHitlCard(host, payload) {
       <span class="hitl__hint">Principle P3 · Human-in-the-Loop</span>
     </div>`;
 
-  card.querySelector('.btn--confirm').onclick = () => {
+  const btnConfirm = card.querySelector('.btn--confirm');
+  const btnCancel = card.querySelector('.btn--cancel');
+
+  btnConfirm.onclick = async () => {
+    btnConfirm.disabled = true;
+    btnCancel.disabled = true;
+    btnConfirm.innerHTML = `<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1s infinite"></span> 承認リクエスト送信中…`;
+
+    // Wait until any active turn finishes so send() is not dropped by state.busy
+    while (state.busy) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
     card.classList.add('hitl--resolved');
-    send(`承認します。同じ内容を user_confirmed=True で実行してください。`);
+    send(confirmMsg);
   };
-  card.querySelector('.btn--cancel').onclick = () => {
+
+  btnCancel.onclick = () => {
     card.classList.add('hitl--resolved');
     toast('操作を取り消しました。システムは変更されていません。');
   };
@@ -442,16 +470,17 @@ async function send(text) {
   } finally {
     state.busy = false;
     updateSendState();
-    await refreshPanels();
+    await refreshPanels(true);
     scrollDown();
   }
 }
 
 /* ────────────────────────────── Governance Panels ────────────────────────────── */
 
-async function refreshPanels() {
+async function refreshPanels(force = false) {
+  const refreshParam = force ? '&refresh=1' : '';
   const [stateRes, auditRes] = await Promise.all([
-    fetch(`/api/state?employee_id=${encodeURIComponent(state.employeeId)}`).then((r) => r.json()),
+    fetch(`/api/state?employee_id=${encodeURIComponent(state.employeeId)}${refreshParam}`).then((r) => r.json()),
     fetch('/api/audit?limit=50').then((r) => r.json()),
   ]);
   renderWorkweek(stateRes);

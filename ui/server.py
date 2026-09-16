@@ -347,6 +347,8 @@ async def chat(request: Request) -> StreamingResponse:
                                 x["section_id"] for x in all_citations
                             ]:
                                 all_citations.append(c)
+                        if classification.get("verdict") == "SUCCESS" and meta.get("kind") == "write":
+                            _STATE_CACHE.pop(user_id, None)
                         yield _sse(
                             "tool_result",
                             {
