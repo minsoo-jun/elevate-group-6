@@ -21,6 +21,9 @@ WORKDIR /code
 COPY ./pyproject.toml ./README.md ./uv.lock* ./
 
 COPY ./app ./app
+COPY ./knowledge ./knowledge
+COPY ./elevate-apac-m3-policydoc.md ./
+COPY ./ui ./ui
 
 RUN uv sync --frozen
 

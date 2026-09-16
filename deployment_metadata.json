@@ -1,4 +1,8 @@
 {
-  "remote_agent_runtime_id": "None",
-  "deployment_timestamp": "None"
+  "remote_agent_runtime_id": "projects/318552719930/locations/asia-northeast1/reasoningEngines/3186652978132025344",
+  "deployment_target": "agent_runtime",
+  "is_a2a": true,
+  "language": "python",
+  "agent_directory": "app",
+  "deployment_timestamp": "2026-09-16T05:41:25.976977+00:00"
 }
