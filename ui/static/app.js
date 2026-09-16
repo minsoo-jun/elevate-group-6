@@ -662,9 +662,19 @@ function updateSendState() {
 
 /* ────────────────────────────── Wiring ────────────────────────────── */
 
+let isComposing = false;
+$('input').addEventListener('compositionstart', () => { isComposing = true; });
+$('input').addEventListener('compositionend', () => {
+  // Delay clearing so the keydown event immediately following compositionend is ignored
+  setTimeout(() => { isComposing = false; }, 20);
+});
+
 $('input').addEventListener('input', () => { autoSize(); updateSendState(); });
 $('input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.isComposing || isComposing || e.keyCode === 229) {
+      return;
+    }
     e.preventDefault();
     submit();
   }
