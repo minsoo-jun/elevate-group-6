@@ -4,7 +4,7 @@
    ============================================================ */
 
 const state = {
-  employeeId: 'EMP-1001',
+  employeeId: 'EMP-791',
   employee: null,
   sessionId: null,
   users: [],
@@ -29,7 +29,9 @@ async function bootstrap() {
   const data = await res.json();
   state.users = data.users;
   state.suggestions = data.suggestions;
+  state.employeeId = data.primary_employee_id || state.employeeId;
   state.employee = state.users.find((u) => u.employee_id === state.employeeId);
+  $('composerUser').textContent = `${state.employeeId} として実行中`;
   renderIdentity();
   renderScenarios();
   await refreshPanels();
@@ -41,13 +43,15 @@ function renderIdentity() {
   state.users.forEach((u) => {
     const active = u.employee_id === state.employeeId;
     const arrCls = u.work_arrangement.replace('-', '');
-    const btn = el('button', 'identity__item');
+    const demo = u.kind === 'rbac_demo';
+    const btn = el('button', demo ? 'identity__item identity__item--demo' : 'identity__item');
     btn.type = 'button';
     btn.setAttribute('aria-pressed', String(active));
+    if (u.note) btn.title = u.note;
     btn.innerHTML = `
       <span class="identity__avatar">${esc(u.initials)}</span>
       <span class="identity__meta">
-        <span class="identity__name">${esc(u.name)}</span>
+        <span class="identity__name">${esc(u.name)}${u.badge ? `<span class="identity__badge identity__badge--${demo ? 'demo' : 'live'}">${esc(u.badge)}</span>` : ''}</span>
         <span class="identity__role">${esc(u.employee_id)} · ${esc(u.title)}</span>
       </span>
       <span class="arrangement arrangement--${esc(arrCls)}">${esc(u.work_arrangement)}</span>`;
@@ -64,7 +68,9 @@ async function switchUser(id) {
   renderIdentity();
   $('composerUser').textContent = `${id} として実行中`;
   await refreshPanels();
-  toast(`${state.employee.name}（${id}）としてログインしました`);
+  toast(state.employee?.kind === 'rbac_demo'
+    ? `${state.employee.name}（${id}）— 他人の ID です。アクセス拒否が実演されます。`
+    : `${state.employee.name}（${id}）としてログインしました`);
 }
 
 const DOMAIN_OF = {
@@ -184,6 +190,7 @@ const VERDICT_LABEL = {
   ERROR: 'エラー',
   CONFIRMATION_REQUIRED: '承認待ち',
   ROLLBACK: '補償ロールバック',
+  SERVICE_UNAVAILABLE: '接続不可',
 };
 
 function resolveTraceStep(step, payload) {
@@ -199,18 +206,21 @@ function resolveTraceStep(step, payload) {
   }
 }
 
-/* Guardrail denial / rollback callout */
+/* Guardrail denial / rollback / connectivity callout */
 function addVerdictCallout(host, payload) {
-  if (!['DENIED', 'ERROR', 'ROLLBACK'].includes(payload.verdict)) return;
+  if (!['DENIED', 'ERROR', 'ROLLBACK', 'SERVICE_UNAVAILABLE'].includes(payload.verdict)) return;
   const icons = {
     DENIED: '<path d="M8 1.5 14.5 13h-13z"/><path d="M8 6v3.2M8 11.2h.01"/>',
     ERROR: '<path d="M8 1.5 14.5 13h-13z"/><path d="M8 6v3.2M8 11.2h.01"/>',
     ROLLBACK: '<path d="M2.4 8a5.6 5.6 0 1 0 1.7-4"/><path d="M2.3 2.2v3.6h3.6"/>',
+    // Disconnected-plug / offline cloud: an infrastructure warning, not a verdict.
+    SERVICE_UNAVAILABLE: '<path d="M8 1.6a6.4 6.4 0 1 0 0 12.8A6.4 6.4 0 0 0 8 1.6z"/><path d="M3.5 3.5l9 9"/>',
   };
   const titles = {
     DENIED: 'ツール層ガードレールにより拒否されました',
     ERROR: '下流システムでエラーが発生しました',
     ROLLBACK: '補償トランザクションを実行しました',
+    SERVICE_UNAVAILABLE: 'リモートシステムに接続できません（一時的な障害）',
   };
   const c = el('div', `verdict verdict--${payload.verdict}`);
   c.innerHTML = `
@@ -412,7 +422,7 @@ async function send(text) {
 
 async function refreshPanels() {
   const [stateRes, auditRes] = await Promise.all([
-    fetch(`/api/state?employee_id=${state.employeeId}`).then((r) => r.json()),
+    fetch(`/api/state?employee_id=${encodeURIComponent(state.employeeId)}`).then((r) => r.json()),
     fetch('/api/audit?limit=50').then((r) => r.json()),
   ]);
   renderWorkweek(stateRes);
@@ -421,69 +431,102 @@ async function refreshPanels() {
   $('auditBadge').textContent = auditRes.total;
 }
 
-const LEAVE_MAX = { annual: 14, sick: 14, childcare: 6, toil: 4 };
-const LEAVE_JA = { annual: '有給休暇 (Annual)', sick: '病気休暇 (Sick)', childcare: '育児休暇 (Childcare)', toil: '代休 (TOIL)' };
+/* WorkWeek exposes exactly two bookable balances over MCP. Childcare (§24.2) and
+   TOIL (§25.3) are policy-governed but tracked offline, so they are not meters. */
+const LEAVE_JA = {
+  vacation: '有給休暇 (Vacation)',
+  sick: '病気休暇 (Sick)',
+  annual: '有給休暇 (Annual)',
+  Vacation: '有給休暇 (Vacation)',
+  Sick: '病気休暇 (Sick)',
+};
+
+/* Per-panel unavailable / denied placeholder driven by `data.panels[key]`. */
+function panelNotice(panel, emptyTitle, emptyBody) {
+  if (!panel || panel.ok) return null;
+  if (panel.status === 'SERVICE_UNAVAILABLE') {
+    return el('div', 'empty empty--warn',
+      `<strong>接続できません</strong>${esc(panel.message || 'リモートシステムに接続できません。')}`);
+  }
+  if (panel.status === 'DENIED') {
+    return el('div', 'empty empty--deny',
+      `<strong>アクセス拒否</strong>${esc(panel.message || 'このレコードへのアクセスは拒否されました。')}`);
+  }
+  return el('div', 'empty', `<strong>${esc(emptyTitle)}</strong>${esc(emptyBody || panel.message || '')}`);
+}
 
 function renderWorkweek(data) {
   const host = $('viewWorkweek');
   host.innerHTML = '';
-  if (!data.profile) { host.appendChild(el('div', 'empty', '<strong>データなし</strong>該当する従業員レコードがありません。')); return; }
+  const panels = data.panels || {};
 
-  const p = data.profile;
-  const profileCard = el('div', 'card');
-  profileCard.innerHTML = `
-    <div class="card__head">従業員プロフィール<span class="tag tag--sys">WorkWeek</span></div>
-    <div class="card__body">
-      <dl class="kv">
-        <dt>氏名</dt><dd>${esc(p.full_name)}</dd>
-        <dt>従業員 ID</dt><dd><code>${esc(p.employee_id)}</code></dd>
-        <dt>職種</dt><dd>${esc(p.job_title)}</dd>
-        <dt>部署</dt><dd>${esc(p.department)}</dd>
-        <dt>勤務形態</dt><dd><span class="arrangement arrangement--${esc((p.work_arrangement||'').replace('-',''))}">${esc(p.work_arrangement)}</span></dd>
-        <dt>住所</dt><dd>${esc(p.address)}</dd>
-        <dt>電話番号</dt><dd>${esc(p.phone)}</dd>
-      </dl>
-    </div>`;
-  host.appendChild(profileCard);
+  if (!data.profile) {
+    host.appendChild(panelNotice(panels.profile, 'データなし', '該当する従業員レコードがありません。')
+      || el('div', 'empty', '<strong>データなし</strong>該当する従業員レコードがありません。'));
+  } else {
+    const p = data.profile;
+    const profileCard = el('div', 'card');
+    profileCard.innerHTML = `
+      <div class="card__head">従業員プロフィール<span class="tag tag--sys">WorkWeek</span></div>
+      <div class="card__body">
+        <dl class="kv">
+          <dt>氏名</dt><dd>${esc(p.full_name)}</dd>
+          <dt>従業員 ID</dt><dd><code>${esc(p.employee_id)}</code></dd>
+          <dt>職種</dt><dd>${esc(p.job_title)}</dd>
+          <dt>部署</dt><dd>${esc(p.department)}</dd>
+          <dt>勤務形態</dt><dd><span class="arrangement arrangement--${esc((p.work_arrangement||'').replace('-',''))}">${esc(p.work_arrangement)}</span></dd>
+          <dt>住所</dt><dd>${esc(p.address)}</dd>
+          <dt>電話番号</dt><dd>${esc(p.phone)}</dd>
+        </dl>
+        ${p.directory_fields_are_local ? '<div class="meter__hint" style="margin-top:10px;">WorkWeek の MCP が返すのは住所と電話番号のみです。氏名・職種・部署・勤務形態はデモ用のローカル表示値です。</div>' : ''}
+      </div>`;
+    host.appendChild(profileCard);
+  }
 
-  if (data.balances) {
-    const b = data.balances;
-    const meters = ['annual', 'sick', 'childcare', 'toil'].map((k) => {
+  const b = data.balances;
+  if (b && Object.keys(b).length) {
+    const kinds = ['vacation', 'sick'].filter((k) => k in b);
+    const meters = kinds.map((k) => {
       const val = Number(b[k] ?? 0);
-      const max = LEAVE_MAX[k];
+      // Entitlement comes straight from the WorkWeek balance report
+      // ("15.0 days remaining (5.0/20.0 used)").
+      const max = Number(b[`${k}_entitlement`] ?? 0) || Math.max(val, 1);
       const pct = Math.max(0, Math.min(100, (val / max) * 100));
+      const used = b[`${k}_used`];
       return `
         <div class="meter meter--${k}">
           <div class="meter__top">
-            <span class="meter__name">${esc(LEAVE_JA[k])}</span>
-            <span class="meter__val">${val.toFixed(1)} / ${max} 日</span>
+            <span class="meter__name">${esc(LEAVE_JA[k] || k)}</span>
+            <span class="meter__val">${val.toFixed(1)} / ${max.toFixed(1)} 日${used !== undefined ? `（消化 ${Number(used).toFixed(1)}）` : ''}</span>
           </div>
           <div class="meter__track"><div class="meter__fill" style="width:${pct}%"></div></div>
         </div>`;
     }).join('');
 
-    const toilHint = Number(b.toil) > 0
-      ? `<div class="meter__hint">Section 25.3 — 未消化の TOIL が ${Number(b.toil).toFixed(1)} 日あります。有給休暇（Annual）より先に消化する必要があり、TOIL 自体は WorkWeek では申請しません。</div>`
-      : '';
+    const offlineHint = `<div class="meter__hint">Section 24.2（育児休暇）と Section 25.3（TOIL）は WorkWeek のセルフサービス申請対象外で、ライン マネージャー / HR が offline で管理します。TOIL は有給休暇より先に消化する必要があります。</div>`;
 
     const balCard = el('div', 'card');
     balCard.innerHTML = `
       <div class="card__head">休暇残高<span class="tag tag--sys">WorkWeek</span></div>
-      <div class="card__body"><div class="meters">${meters}</div>${toilHint}</div>`;
+      <div class="card__body"><div class="meters">${meters}</div>${offlineHint}</div>`;
     host.appendChild(balCard);
+  } else {
+    const notice = panelNotice(panels.balances, '残高なし', '休暇残高を取得できませんでした。');
+    if (notice) host.appendChild(notice);
   }
 
   const reqCard = el('div', 'card');
-  const reqRows = data.leave_requests.length
+  const reqNotice = panelNotice(panels.leave_requests, '', '');
+  const reqRows = (data.leave_requests || []).length
     ? `<div class="rows">${data.leave_requests.map((r) => `
         <div class="row">
           <div class="row__main">
-            <div class="row__title">${esc(LEAVE_JA[r.leave_type] || r.leave_type)} · ${Number(r.days).toFixed(1)} 日</div>
-            <div class="row__meta">${esc(r.request_id)} · ${esc(r.start_date)} → ${esc(r.end_date)}</div>
+            <div class="row__title">${esc(LEAVE_JA[r.leave_type] || r.leave_type)} · ${Number(r.days ?? 0).toFixed(1)} 日</div>
+            <div class="row__meta">#${esc(r.request_id)} · ${esc(r.start_date)} → ${esc(r.end_date)}</div>
           </div>
-          <span class="state-pill state-${esc(r.status)}">${esc(r.status)}</span>
+          <span class="state-pill state-${esc(String(r.status || '').replace(/\s/g, ''))}">${esc(r.status)}</span>
         </div>`).join('')}</div>`
-    : '<div class="empty"><strong>申請なし</strong>まだ休暇申請は登録されていません。</div>';
+    : (reqNotice ? reqNotice.outerHTML : '<div class="empty"><strong>申請なし</strong>まだ休暇申請は登録されていません。</div>');
   reqCard.innerHTML = `<div class="card__head">休暇申請<span class="tag tag--sys">WorkWeek</span></div>${reqRows}`;
   host.appendChild(reqCard);
 }
@@ -491,17 +534,19 @@ function renderWorkweek(data) {
 function renderItsm(data) {
   const host = $('viewItsm');
   host.innerHTML = '';
+  const panels = data.panels || {};
   const card = el('div', 'card');
-  const rows = data.tickets.length
+  const notice = panelNotice(panels.tickets, '', '');
+  const rows = (data.tickets || []).length
     ? `<div class="rows">${data.tickets.map((t) => `
         <div class="row">
           <div class="row__main">
             <div class="row__title">${esc(t.title)}</div>
-            <div class="row__meta">${esc(t.ticket_id)} · ${esc(t.category)} · P${esc(t.priority)}${Number(t.amount_usd) > 0 ? ` · $${Number(t.amount_usd).toFixed(2)}` : ''}</div>
+            <div class="row__meta">${esc(t.ticket_id)} · ${esc(t.category)} · ${esc(t.priority)}${t.assigned_to ? ` · ${esc(t.assigned_to)}` : ''}</div>
           </div>
-          <span class="state-pill state-${esc((t.status||'').replace(' ',''))}">${esc(t.status)}</span>
+          <span class="state-pill state-${esc((t.status||'').replace(/\s/g, ''))}">${esc(t.status)}</span>
         </div>`).join('')}</div>`
-    : '<div class="empty"><strong>チケットなし</strong>この従業員のチケットはありません。</div>';
+    : (notice ? notice.outerHTML : '<div class="empty"><strong>チケットなし</strong>この従業員のチケットはありません。</div>');
   card.innerHTML = `<div class="card__head">チケット一覧<span class="tag tag--sys">ServiceImmediately</span></div>${rows}`;
   host.appendChild(card);
 
@@ -511,12 +556,13 @@ function renderItsm(data) {
     <div class="card__body">
       <dl class="kv">
         <dt><code>New</code> から</dt><dd>In Progress / Cancelled</dd>
-        <dt><code>In Progress</code> から</dt><dd>Resolved / Cancelled</dd>
+        <dt><code>In Progress</code> から</dt><dd>Resolved / Closed / Cancelled</dd>
         <dt><code>Resolved</code> から</dt><dd>Closed / In Progress</dd>
         <dt><code>Closed</code></dt><dd>終端状態</dd>
       </dl>
       <div class="meter__hint" style="margin-top:10px;">
-        <code>New</code> から <code>Closed</code> への直接遷移はツール層で拒否されます。
+        Section 5.5 に基づき、<code>New</code> から <code>Closed</code> への直接遷移はツール層で拒否されます
+        （ServiceImmediately 本体は許可しますが、当社ガードレールはハンドブックに従い、より厳格です）。
       </div>
     </div>`;
   host.appendChild(fsm);
@@ -644,11 +690,12 @@ document.querySelectorAll('.tab').forEach((tab) => {
 });
 
 $('resetBtn').onclick = async () => {
-  await fetch('/api/reset', { method: 'POST' });
+  const res = await fetch('/api/reset', { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
   state.sessionId = null;
   $('streamInner').innerHTML = '';
   await refreshPanels();
-  toast('企業データと監査ログを初期化しました');
+  toast(data.message || 'ローカルのデモ状態のみを初期化しました（リモートシステムは変更されません）');
 };
 
 $('drawerClose').onclick = closeDrawer;

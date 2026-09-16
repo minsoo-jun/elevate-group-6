@@ -246,6 +246,23 @@ a:hover { text-decoration: underline; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Badge distinguishing the live MCP identity from the RBAC-denial dummies. */
+.identity__badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+  border: 1px solid transparent;
+}
+.identity__badge--live { background: var(--brand-100); color: var(--brand-700); border-color: var(--brand-200, var(--line-soft)); }
+.identity__badge--demo { background: var(--warn-100); color: var(--warn-700); border-color: var(--warn-border); }
+.identity__item--demo { opacity: 0.78; }
+.identity__item--demo:hover,
+.identity__item--demo[aria-pressed="true"] { opacity: 1; }
 .identity__role {
   font-size: 10.5px;
   color: var(--fg-subtle);
@@ -626,6 +643,7 @@ a:hover { text-decoration: underline; }
 .step--ERROR .step__node { background: var(--deny-500); box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 4px var(--deny-border); }
 .step--CONFIRMATION_REQUIRED .step__node { background: var(--warn-500); box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 4px var(--warn-border); }
 .step--ROLLBACK .step__node { background: hsl(280 48% 52%); box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 4px hsl(280 40% 84%); }
+.step--SERVICE_UNAVAILABLE .step__node { background: var(--warn-500); box-shadow: 0 0 0 3px var(--bg-surface), 0 0 0 4px var(--warn-border); }
 .step--running .step__node { background: var(--brand-500); animation: pulse 1.2s var(--ease) infinite; }
 
 .step__main { flex: 1; min-width: 0; }
@@ -666,6 +684,8 @@ a:hover { text-decoration: underline; }
 .tag--DENIED, .tag--ERROR { background: var(--deny-100); color: var(--deny-700); border-color: var(--deny-border); }
 .tag--CONFIRMATION_REQUIRED { background: var(--warn-100); color: var(--warn-700); border-color: var(--warn-border); }
 .tag--ROLLBACK { background: hsl(280 60% 96%); color: hsl(280 52% 36%); border-color: hsl(280 40% 86%); }
+/* Connectivity fault — amber, deliberately NOT the red used for a guardrail denial. */
+.tag--SERVICE_UNAVAILABLE { background: var(--warn-100); color: var(--warn-700); border-color: var(--warn-border); }
 
 .step__args {
   font-family: var(--font-mono);
@@ -721,6 +741,7 @@ a:hover { text-decoration: underline; }
 .verdict--DENIED { background: var(--deny-100); border-color: var(--deny-border); color: var(--deny-700); }
 .verdict--ERROR { background: var(--deny-100); border-color: var(--deny-border); color: var(--deny-700); }
 .verdict--ROLLBACK { background: hsl(280 60% 97%); border-color: hsl(280 40% 86%); color: hsl(280 52% 34%); }
+.verdict--SERVICE_UNAVAILABLE { background: var(--warn-100); border-color: var(--warn-border); color: var(--warn-700); }
 
 /* HITL confirmation card (Principle P3) */
 .hitl {
@@ -1004,6 +1025,8 @@ a:hover { text-decoration: underline; }
   border-radius: var(--r-full);
   transition: width 0.6s var(--ease);
 }
+/* WorkWeek names this balance "Vacation"; `annual` is kept for older payloads. */
+.meter--vacation .meter__fill,
 .meter--annual .meter__fill { background: var(--brand-500); }
 .meter--sick .meter__fill { background: var(--info-500); }
 .meter--childcare .meter__fill { background: var(--ok-500); }
@@ -1066,6 +1089,8 @@ a:hover { text-decoration: underline; }
 .state-Cancelled { background: var(--bg-sunken); color: var(--fg-subtle); border-color: var(--line-soft); }
 .state-SUBMITTED { background: var(--warn-100); color: var(--warn-700); border-color: var(--warn-border); }
 .state-APPROVED { background: var(--ok-100); color: var(--ok-700); border-color: var(--ok-border); }
+/* WorkWeek leave requests carry no status field; the server labels them Approved. */
+.state-Approved { background: var(--ok-100); color: var(--ok-700); border-color: var(--ok-border); }
 
 /* Audit log */
 .audit-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -1140,6 +1165,29 @@ a:hover { text-decoration: underline; }
   line-height: 1.6;
 }
 .empty strong { display: block; color: var(--fg-muted); font-weight: 600; margin-bottom: 3px; font-size: 12.5px; }
+
+/* Panel placeholders carrying a state. Amber = remote system unreachable,
+   red = P6 access denial. The two must never look alike. */
+.empty--warn {
+  margin: 10px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  text-align: left;
+  color: var(--warn-700);
+  background: var(--warn-100);
+  border: 1px solid var(--warn-border);
+}
+.empty--warn strong { color: var(--warn-700); }
+.empty--deny {
+  margin: 10px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  text-align: left;
+  color: var(--deny-700);
+  background: var(--deny-100);
+  border: 1px solid var(--deny-border);
+}
+.empty--deny strong { color: var(--deny-700); }
 
 /* ============================================================
    Citation Drawer (FR-5.3 deep link)

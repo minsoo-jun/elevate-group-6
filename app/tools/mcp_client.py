@@ -13,6 +13,7 @@ This module exposes:
   - `list_mcp_tools(server)`             : discovery helper for connection checks
   - `mcp_enabled()`                      : whether a token is configured
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -46,7 +47,9 @@ RETRYABLE_STATUSES = frozenset({429, 502, 503, 504})
 MCP_MAX_ATTEMPTS = int(os.getenv("MCP_MAX_ATTEMPTS", "5"))
 MCP_BACKOFF_BASE_SECONDS = float(os.getenv("MCP_BACKOFF_BASE_SECONDS", "1.5"))
 # Minimum wall-clock gap between two outbound calls to the same server.
-MCP_MIN_CALL_INTERVAL_SECONDS = float(os.getenv("MCP_MIN_CALL_INTERVAL_SECONDS", "0.35"))
+MCP_MIN_CALL_INTERVAL_SECONDS = float(
+    os.getenv("MCP_MIN_CALL_INTERVAL_SECONDS", "0.35")
+)
 
 _PACE_LOCK = threading.Lock()
 _LAST_CALL_AT: dict[str, float] = {}
@@ -70,8 +73,6 @@ def _pace(server: str) -> None:
         _LAST_CALL_AT[server] = now
 
 
-
-
 class McpNotConfigured(RuntimeError):
     """Raised when no MCP_TOKEN is available."""
 
@@ -84,7 +85,9 @@ def mcp_enabled() -> bool:
 def server_url(server: str) -> str:
     key = server.strip().lower().replace("_", "").replace("-", "")
     if key not in SERVER_PATHS:
-        raise ValueError(f"Unknown MCP server '{server}'. Expected one of {list(SERVER_PATHS)}.")
+        raise ValueError(
+            f"Unknown MCP server '{server}'. Expected one of {list(SERVER_PATHS)}."
+        )
     return f"{MCP_BASE_URL}{SERVER_PATHS[key]}"
 
 
@@ -170,7 +173,9 @@ def _unwrap(result: Any) -> Any:
     return text
 
 
-async def _mcp_call_once(server: str, tool_name: str, args: dict[str, Any] | None) -> dict[str, Any]:
+async def _mcp_call_once(
+    server: str, tool_name: str, args: dict[str, Any] | None
+) -> dict[str, Any]:
     """Single attempt. Raises on transport failure; see `mcp_call` for retries."""
     from mcp import ClientSession
     from mcp.client.streamable_http import streamablehttp_client
@@ -246,7 +251,9 @@ def _retry_after_seconds(exc: BaseException) -> float | None:
     return None
 
 
-async def mcp_call(server: str, tool_name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def mcp_call(
+    server: str, tool_name: str, args: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Invoke a tool on the given MCP server over stateless Streamable HTTP.
 
     Retries transient HTTP failures (429 throttling, 502/503/504) with
@@ -269,7 +276,7 @@ async def mcp_call(server: str, tool_name: str, args: dict[str, Any] | None = No
     for attempt in range(MCP_MAX_ATTEMPTS):
         try:
             return await _mcp_call_once(server, tool_name, args)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             status = _transient_status(exc)
             if status is None or attempt == MCP_MAX_ATTEMPTS - 1:
                 raise
@@ -279,8 +286,6 @@ async def mcp_call(server: str, tool_name: str, args: dict[str, Any] | None = No
 
     # Unreachable: the final attempt either returns or re-raises.
     raise last_exc if last_exc else RuntimeError("mcp_call exhausted retries")
-
-
 
 
 async def list_mcp_tools(server: str) -> list[dict[str, str]]:
@@ -294,7 +299,12 @@ async def list_mcp_tools(server: str) -> list[dict[str, str]]:
             await session.initialize()
             resp = await session.list_tools()
             return [
-                {"name": t.name, "description": (t.description or "").strip().splitlines()[0] if t.description else ""}
+                {
+                    "name": t.name,
+                    "description": (t.description or "").strip().splitlines()[0]
+                    if t.description
+                    else "",
+                }
                 for t in resp.tools
             ]
 
@@ -318,7 +328,7 @@ def _run_coroutine_blocking(coro) -> Any:
         try:
             asyncio.set_event_loop(loop)
             box["value"] = loop.run_until_complete(coro)
-        except BaseException as exc:  # noqa: BLE001
+        except BaseException as exc:
             box["error"] = exc
         finally:
             try:
@@ -358,7 +368,9 @@ def _describe_exception(exc: BaseException, _depth: int = 0) -> str:
     return text
 
 
-def mcp_call_sync(server: str, tool_name: str, args: dict[str, Any] | None = None) -> dict[str, Any]:
+def mcp_call_sync(
+    server: str, tool_name: str, args: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """Blocking MCP tool invocation returning a normalized dict envelope.
 
     Never raises — transport and protocol failures are converted into a
@@ -382,7 +394,7 @@ def mcp_call_sync(server: str, tool_name: str, args: dict[str, Any] | None = Non
             "tool": tool_name,
             "message": str(exc),
         }
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {
             "status": "MCP_ERROR",
             "code": "MCP_TRANSPORT_ERROR",
@@ -390,7 +402,6 @@ def mcp_call_sync(server: str, tool_name: str, args: dict[str, Any] | None = Non
             "tool": tool_name,
             "message": _describe_exception(exc),
         }
-
 
     if isinstance(payload, dict):
         return payload

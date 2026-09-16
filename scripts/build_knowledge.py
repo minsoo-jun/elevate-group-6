@@ -21,6 +21,7 @@ Usage:
 
 `--check` parses and reports without writing anything.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -52,6 +53,9 @@ def _yaml_escape(value: str) -> str:
 
 
 def _front_matter(section: dict[str, Any]) -> str:
+    # Built separately: nesting an f-string inside an f-string requires
+    # Python 3.12+, and this project supports 3.11.
+    source_lines = f"L{section['line_start']}-L{section['line_end']}"
     lines = [
         "---",
         f"section_id: {_yaml_escape(section['section_id'])}",
@@ -61,7 +65,7 @@ def _front_matter(section: dict[str, Any]) -> str:
         f"parent_number: {_yaml_escape(section['parent_number'])}",
         f"parent_title: {_yaml_escape(section['parent_title'])}",
         f"source: {_yaml_escape('elevate-apac-m3-policydoc.md')}",
-        f"source_lines: {_yaml_escape('L%d-L%d' % (section['line_start'], section['line_end']))}",
+        f"source_lines: {_yaml_escape(source_lines)}",
         "---",
     ]
     return "\n".join(lines)

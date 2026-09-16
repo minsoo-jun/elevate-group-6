@@ -54,7 +54,18 @@ select = [
     "UP", # pyupgrade
     "RUF", # ruff specific rules
 ]
-ignore = ["E501", "C901", "B006"] # ignore line too long, too complex
+ignore = [
+    "E501",  # line too long
+    "C901",  # too complex
+    "B006",  # mutable default argument
+    # The agent replies to employees in Japanese, so full-width punctuation
+    # (（）、。) is intended product output rather than a homoglyph smuggled
+    # into ASCII. These three rules flagged 66 of 87 findings and buried the
+    # real ones.
+    "RUF001",  # ambiguous character in a string
+    "RUF002",  # ambiguous character in a docstring
+    "RUF003",  # ambiguous character in a comment
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app", "frontend"]
@@ -81,8 +92,16 @@ not-subscriptable = "ignore"
 deprecated = "ignore"
 
 [tool.codespell]
-ignore-words-list = "rouge"
-skip = "./locust_env/*,uv.lock,.venv,./frontend,**/package-lock.json"
+# recuse  - correct legal English, appears throughout the customer's handbook
+# sme     - Subject Matter Expert
+# vas     - a Mermaid node id for the Vertex AI Search / Vector Search box
+# fpr     - False Positive Rate, used across the SDD's evaluation chapter
+ignore-words-list = "rouge,recuse,sme,vas,fpr"
+# `knowledge/` is generated verbatim from the customer's handbook and
+# `elevate-apac-m3-policydoc.md` is that handbook. Both are authoritative source
+# text that the guardrails quote by section number, so they must never be
+# "corrected".
+skip = "./locust_env/*,uv.lock,.venv,./frontend,**/package-lock.json,./knowledge/*,./elevate-apac-m3-policydoc.md,./artifacts/*,requirements.lock.txt"
 
 
 [build-system]

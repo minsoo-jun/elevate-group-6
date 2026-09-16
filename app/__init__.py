@@ -26,6 +26,8 @@ os.environ.setdefault("GOOGLE_CLOUD_PROJECT", "elevate-minsoo")
 os.environ.setdefault("GOOGLE_CLOUD_LOCATION", "global")
 os.environ.setdefault("GOOGLE_API_USE_CLIENT_CERTIFICATE", "false")
 
-from .agent import app
+# Imported last on purpose: the environment must be populated before ADK reads
+# it at import time, so this cannot move to the top of the file.
+from .agent import app  # noqa: E402
 
 __all__ = ["app"]

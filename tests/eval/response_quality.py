@@ -1,6 +1,7 @@
 """Local LLM-as-judge for `custom_response_quality` (see eval_config.yaml).
 Invokes a clean subprocess (`tests/eval/judge_worker.py`) to avoid SSL/asyncio thread-pool deadlocks.
 """
+
 import json
 import os
 import subprocess
@@ -17,7 +18,9 @@ def _extract_text(obj) -> str:
             parts = obj["response"].get("parts", [])
             return " ".join(p.get("text", "") for p in parts if isinstance(p, dict))
         if "parts" in obj and isinstance(obj["parts"], list):
-            return " ".join(p.get("text", "") for p in obj["parts"] if isinstance(p, dict))
+            return " ".join(
+                p.get("text", "") for p in obj["parts"] if isinstance(p, dict)
+            )
     return str(obj)
 
 
@@ -66,7 +69,12 @@ def evaluate(instance):
         pass
 
     # Deterministic fallback verification
-    has_citation = "Section" in response_text or "WorkWeek" in response_text or "ServiceImmediately" in response_text or "not provided" in response_text.lower()
+    has_citation = (
+        "Section" in response_text
+        or "WorkWeek" in response_text
+        or "ServiceImmediately" in response_text
+        or "not provided" in response_text.lower()
+    )
     score = 5 if (len(response_text) > 40 and has_citation) else 4
     return {
         "score": score,

@@ -1385,7 +1385,9 @@ def enforce_data_isolation(context, tool_request):
     requested_emp_id = tool_request.arguments.get("employee_id")
 
     if not is_authorized_to_access(caller_emp_id, requested_emp_id):
-        context.abort(reason=f"許可されていないデータへのアクセス試行です (要求元: {caller_emp_id})")
+        context.abort(
+            reason=f"許可されていないデータへのアクセス試行です (要求元: {caller_emp_id})"
+        )
 ```
 
 同等の検証を `hcm-tool-server` / `itsm-tool-server` 側の `EnterpriseToolAdapter._check_authorization_scope()` でも **二重に**実施する。エージェント側コールバックは UX のための早期失敗であり、真の実施点はツールサーバ側である。
@@ -1606,20 +1608,29 @@ SELECT
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
-class EnterpriseToolAdapter(ABC):
-    def execute_tool(self, request: Dict[str, Any], context_user_id: str) -> Dict[str, Any]:
-        self._verify_caller_identity(context_user_id)        # 1. 呼び出し元ID検証 (FR-1.2)
-        self._check_authorization_scope(context_user_id)     # 2. 認可スコープ判定 (FR-1.5)
-        self._validate_argument_schema(request)              # 3. スキーマ検証
-        self.validate_business_guardrails(request)           # 4. 業務ルール検証 (FR-3.3/4.3・派生クラス)
 
-        idempotency_key = self._resolve_idempotency_key(request, context_user_id)  # 5. 冪等性 (NFR-4.2)
+class EnterpriseToolAdapter(ABC):
+    def execute_tool(
+        self, request: Dict[str, Any], context_user_id: str
+    ) -> Dict[str, Any]:
+        self._verify_caller_identity(context_user_id)  # 1. 呼び出し元ID検証 (FR-1.2)
+        self._check_authorization_scope(context_user_id)  # 2. 認可スコープ判定 (FR-1.5)
+        self._validate_argument_schema(request)  # 3. スキーマ検証
+        self.validate_business_guardrails(
+            request
+        )  # 4. 業務ルール検証 (FR-3.3/4.3・派生クラス)
+
+        idempotency_key = self._resolve_idempotency_key(
+            request, context_user_id
+        )  # 5. 冪等性 (NFR-4.2)
         if self._is_already_processed(idempotency_key):
             return self._get_cached_idempotent_response(idempotency_key)
 
-        raw_response = self.call_downstream_api(request)     # 6. 下流呼出（リトライ/タイムアウト込）
-        normalized = self.normalize_response(raw_response)   # 7. 応答正規化
-        self._emit_audit_record(request, normalized)         # 8. 監査発行 (NFR-1.2)
+        raw_response = self.call_downstream_api(
+            request
+        )  # 6. 下流呼出（リトライ/タイムアウト込）
+        normalized = self.normalize_response(raw_response)  # 7. 応答正規化
+        self._emit_audit_record(request, normalized)  # 8. 監査発行 (NFR-1.2)
         return normalized
 
     @abstractmethod
@@ -1728,14 +1739,15 @@ submit_leave_tool = FunctionTool(
 ```python
 from datetime import datetime, timezone, timedelta
 
+
 def validate_leave_request(payload: dict, employee_balance: int) -> None:
     start = datetime.strptime(payload["start_date"], "%Y-%m-%d").date()
     end = datetime.strptime(payload["end_date"], "%Y-%m-%d").date()
     today = datetime.now(timezone(timedelta(hours=9))).date()  # JST
 
-    if start < today:                      # G-HCM-2
+    if start < today:  # G-HCM-2
         raise GuardrailError("G-HCM-2", "過去の日付になっているため、申請できません。")
-    if end < start:                        # G-HCM-2
+    if end < start:  # G-HCM-2
         raise GuardrailError("G-HCM-2", "終了日が開始日より前に設定されています。")
 
     requested_days = business_days_between(start, end)
@@ -1985,7 +1997,7 @@ flowchart LR
     VAR --> DLP["Sensitive Data Protection<br/>SPII 検査"]
     VAR --> CR["Cloud Run / Workflows<br/>ツールサーバ・Saga"]
     VAR --> DOCAI["Document AI Layout Parser<br/>規程取込（差分のみ）"]
-    VAR --> LOGING["Cloud Logging 取込"]
+    VAR --> LOGGING["Cloud Logging 取込"]
 ```
 
 | ドライバ | 影響サービス | 単価の考え方 | 月間試算 (USD) | 変動要因 |

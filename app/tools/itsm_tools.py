@@ -12,6 +12,7 @@ SDD guardrail **G-ITSM-1** deliberately forbids that shortcut so every incident
 carries a triage and resolution trail. Our policy layer is intentionally stricter
 than the platform.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -44,8 +45,16 @@ PRIORITY_LABELS = {
     4: "4 - Low",
 }
 CRITICAL_KEYWORDS = (
-    "outage", "crash", "down", "downtime", "unavailable", "offline",
-    "cannot access", "not working", "data loss", "breach",
+    "outage",
+    "crash",
+    "down",
+    "downtime",
+    "unavailable",
+    "offline",
+    "cannot access",
+    "not working",
+    "data loss",
+    "breach",
 )
 
 VALID_CATEGORIES = (
@@ -152,12 +161,14 @@ def _status_of(t: dict[str, Any]) -> str:
     return str(t.get("status") or t.get("state") or "")
 
 
-
 def _normalize_priority(priority: Any) -> tuple[str | None, str | None]:
     """Return (mcp_priority_label, error_message)."""
     if isinstance(priority, int):
         if priority not in PRIORITY_LABELS:
-            return None, f"優先度は 1〜4 の整数、または '1 - Critical' 形式の文字列で指定してください（入力: {priority}）。"
+            return (
+                None,
+                f"優先度は 1〜4 の整数、または '1 - Critical' 形式の文字列で指定してください（入力: {priority}）。",
+            )
         return PRIORITY_LABELS[priority], None
 
     text = str(priority).strip()
@@ -168,7 +179,10 @@ def _normalize_priority(priority: Any) -> tuple[str | None, str | None]:
     for label in PRIORITY_LABELS.values():
         if text.lower() == label.split(" - ")[1].lower():
             return label, None
-    return None, f"優先度 '{priority}' は無効です。1〜4 または '1 - Critical' / '2 - High' / '3 - Moderate' / '4 - Low' を指定してください。"
+    return (
+        None,
+        f"優先度 '{priority}' は無効です。1〜4 または '1 - Critical' / '2 - High' / '3 - Moderate' / '4 - Low' を指定してください。",
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -176,7 +190,9 @@ def _normalize_priority(priority: Any) -> tuple[str | None, str | None]:
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def list_tickets(employee_id: str = "EMP-791", caller_id: str = "EMP-791") -> dict[str, Any]:
+def list_tickets(
+    employee_id: str = "EMP-791", caller_id: str = "EMP-791"
+) -> dict[str, Any]:
     """List all ServiceImmediately incident tickets requested by an employee, via MCP.
 
     Enforces Principle P6 (RBAC Data Isolation). ServiceImmediately independently
@@ -189,7 +205,9 @@ def list_tickets(employee_id: str = "EMP-791", caller_id: str = "EMP-791") -> di
     Returns:
         List of incident tickets with their IDs, categories, priorities, and statuses.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "list_tickets", "ServiceImmediately")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "list_tickets", "ServiceImmediately"
+    )
     if violation:
         return violation
 
@@ -207,7 +225,11 @@ def list_tickets(employee_id: str = "EMP-791", caller_id: str = "EMP-791") -> di
         target_system="ServiceImmediately",
         action_type="READ",
         decision="ALLOW",
-        request_summary={"employee_id": employee_id, "count": len(tickets), "via": "mcp:list_tickets"},
+        request_summary={
+            "employee_id": employee_id,
+            "count": len(tickets),
+            "via": "mcp:list_tickets",
+        },
     )
     return {
         "status": "SUCCESS",
@@ -328,7 +350,9 @@ def create_incident(
     Returns:
         Result dictionary with the created ticket, or a specific guardrail denial code.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "create_incident", "ServiceImmediately")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "create_incident", "ServiceImmediately"
+    )
     if violation:
         return violation
 
@@ -361,7 +385,9 @@ def create_incident(
         }
 
     # Critical priority requires an active-outage keyword (ServiceImmediately rule).
-    if mcp_priority == "1 - Critical" and not any(k in desc.lower() for k in CRITICAL_KEYWORDS):
+    if mcp_priority == "1 - Critical" and not any(
+        k in desc.lower() for k in CRITICAL_KEYWORDS
+    ):
         audit_id = log_audit_event(
             actor_id=caller_id,
             target_employee_id=employee_id,
@@ -394,8 +420,12 @@ def create_incident(
     is_hoe = is_home_office_equipment or any(
         kw in combined
         for kw in (
-            "home office equipment", "ergonomic chair", "standing desk",
-            "home office allowance", "monitor allowance", "在宅勤務機器",
+            "home office equipment",
+            "ergonomic chair",
+            "standing desk",
+            "home office allowance",
+            "monitor allowance",
+            "在宅勤務機器",
         )
     )
 
@@ -477,12 +507,18 @@ def create_incident(
             }
 
     # ── G-ITSM-3: duplicate open incident detection (live read) ────────────
-    existing_payload = mcp_call_sync(SERVER, "list_tickets", {"employee_id": employee_id})
+    existing_payload = mcp_call_sync(
+        SERVER, "list_tickets", {"employee_id": employee_id}
+    )
     if not _mcp_failed(existing_payload):
         for t in _extract_tickets(existing_payload):
             if _status_of(t) not in ("New", "In Progress"):
                 continue
-            t_desc = str(t.get("short_description") or t.get("description") or "").strip().lower()
+            t_desc = (
+                str(t.get("short_description") or t.get("description") or "")
+                .strip()
+                .lower()
+            )
             t_cat = str(t.get("category") or "")
             if t_desc == desc.lower() and t_cat == category:
                 audit_id = log_audit_event(
@@ -493,7 +529,10 @@ def create_incident(
                     action_type="WRITE",
                     decision="DENY",
                     deny_reason="G-ITSM-3_DUPLICATE_INCIDENT",
-                    request_summary={"existing_ticket_id": _ticket_id_of(t), "short_description": desc},
+                    request_summary={
+                        "existing_ticket_id": _ticket_id_of(t),
+                        "short_description": desc,
+                    },
                 )
                 return {
                     "status": "DENIED",
@@ -515,7 +554,11 @@ def create_incident(
             target_system="ServiceImmediately",
             action_type="WRITE_PROPOSAL",
             decision="ALLOW",
-            request_summary={"category": category, "priority": mcp_priority, "short_description": desc},
+            request_summary={
+                "category": category,
+                "priority": mcp_priority,
+                "short_description": desc,
+            },
         )
         return {
             "status": "CONFIRMATION_REQUIRED",
@@ -612,7 +655,11 @@ def add_ticket_comment(
         Result dictionary confirming the comment was appended.
     """
     if not comment.strip():
-        return {"status": "ERROR", "code": "EMPTY_COMMENT", "message": "コメント本文を入力してください。"}
+        return {
+            "status": "ERROR",
+            "code": "EMPTY_COMMENT",
+            "message": "コメント本文を入力してください。",
+        }
 
     # Ownership pre-check (Principle P6) — get_ticket only resolves the caller's own tickets.
     owned = get_ticket(ticket_id, caller_id=caller_id)
@@ -627,7 +674,9 @@ def add_ticket_comment(
     if _mcp_failed(payload):
         return _degraded(payload, caller_id, "add_ticket_comment")
     if _mcp_rejected(payload):
-        return _rejection(payload, caller_id, "add_ticket_comment", "ITSM_COMMENT_REJECTED")
+        return _rejection(
+            payload, caller_id, "add_ticket_comment", "ITSM_COMMENT_REJECTED"
+        )
 
     audit_id = log_audit_event(
         actor_id=caller_id,
@@ -636,7 +685,11 @@ def add_ticket_comment(
         target_system="ServiceImmediately",
         action_type="WRITE",
         decision="ALLOW",
-        request_summary={"ticket_id": ticket_id, "comment_length": len(comment), "via": "mcp:add_ticket_comment"},
+        request_summary={
+            "ticket_id": ticket_id,
+            "comment_length": len(comment),
+            "via": "mcp:add_ticket_comment",
+        },
     )
     return {
         "status": "SUCCESS",
@@ -692,7 +745,11 @@ def update_ticket_status(
             action_type="WRITE",
             decision="DENY",
             deny_reason="G-ITSM-1_INVALID_STATE_TRANSITION",
-            request_summary={"ticket_id": ticket_id, "from": current_status, "to": new_status},
+            request_summary={
+                "ticket_id": ticket_id,
+                "from": current_status,
+                "to": new_status,
+            },
         )
         return {
             "status": "DENIED",
@@ -717,7 +774,11 @@ def update_ticket_status(
             target_system="ServiceImmediately",
             action_type="WRITE_PROPOSAL",
             decision="ALLOW",
-            request_summary={"ticket_id": ticket_id, "from": current_status, "to": new_status},
+            request_summary={
+                "ticket_id": ticket_id,
+                "from": current_status,
+                "to": new_status,
+            },
         )
         return {
             "status": "CONFIRMATION_REQUIRED",
@@ -750,7 +811,9 @@ def update_ticket_status(
     if _mcp_failed(payload):
         return _degraded(payload, caller_id, "update_ticket_status")
     if _mcp_rejected(payload):
-        return _rejection(payload, caller_id, "update_ticket_status", "ITSM_TRANSITION_REJECTED")
+        return _rejection(
+            payload, caller_id, "update_ticket_status", "ITSM_TRANSITION_REJECTED"
+        )
 
     audit_id = log_audit_event(
         actor_id=caller_id,

@@ -6,6 +6,7 @@ Three tool families:
   * itsm_tools   — ServiceImmediately (ITSM) via MCP
   * saga_tools   — cross-system orchestration with compensating transactions
 """
+
 from app.tools.hcm_tools import (
     cancel_leave_request,
     get_current_employee_id,
@@ -29,7 +30,10 @@ from app.tools.policy_tools import (
 )
 from app.tools.saga_tools import execute_remote_work_transition_saga
 
-__all__ = [
+# Deliberately grouped by backing system rather than alphabetised, so it stays
+# obvious which tools reach WorkWeek, which reach ServiceImmediately, and which
+# are local. Sorting would interleave the three families.
+__all__ = [  # noqa: RUF022
     # Policy Q&A (local, grounded)
     "search_policy",
     "list_policy_concepts",

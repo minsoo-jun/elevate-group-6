@@ -8,6 +8,7 @@ Verifies that both the WorkWeek and ServiceImmediately Streamable HTTP MCP
 servers are reachable with the configured `X-MCP-Token` and prints the tool
 catalog discovered on each.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +22,13 @@ from app.tools.mcp_client import (
     server_url,
 )
 
-GREEN, RED, YELLOW, DIM, RESET = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
+GREEN, RED, YELLOW, DIM, RESET = (
+    "\033[32m",
+    "\033[31m",
+    "\033[33m",
+    "\033[2m",
+    "\033[0m",
+)
 
 
 async def check_server(label: str, server: str) -> bool:
@@ -30,7 +37,7 @@ async def check_server(label: str, server: str) -> bool:
     print(f"   {DIM}{url}{RESET}")
     try:
         tools = await list_mcp_tools(server)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"   {RED}✗ FAILED{RESET}  {type(exc).__name__}: {exc}")
         return False
     print(f"   {GREEN}✓ CONNECTED{RESET}  {len(tools)} tools discovered")
@@ -47,15 +54,21 @@ async def check_explicit(url: str, token: str) -> bool:
 
     print(f"\n{DIM}── explicit target{RESET}\n   {DIM}{url}{RESET}")
     try:
-        async with streamablehttp_client(url, headers={"X-MCP-Token": token}) as (r, w, _):
+        async with streamablehttp_client(url, headers={"X-MCP-Token": token}) as (
+            r,
+            w,
+            _,
+        ):
             async with ClientSession(r, w) as session:
                 await session.initialize()
                 resp = await session.list_tools()
-                print(f"   {GREEN}✓ CONNECTED{RESET}  {len(resp.tools)} tools discovered")
+                print(
+                    f"   {GREEN}✓ CONNECTED{RESET}  {len(resp.tools)} tools discovered"
+                )
                 for t in resp.tools:
                     print(f"      {DIM}•{RESET} {t.name}")
         return True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"   {RED}✗ FAILED{RESET}  {type(exc).__name__}: {exc}")
         return False
 
@@ -70,7 +83,9 @@ async def main() -> int:
 
     if not mcp_enabled():
         print(f"\n{YELLOW}⚠ MCP_TOKEN is not configured.{RESET}")
-        print(f"  Add {DIM}MCP_TOKEN=mcp_your_token_here{RESET} to .env (see env.md), then re-run.")
+        print(
+            f"  Add {DIM}MCP_TOKEN=mcp_your_token_here{RESET} to .env (see env.md), then re-run."
+        )
         return 2
 
     masked = MCP_TOKEN[:8] + "…" + MCP_TOKEN[-4:] if len(MCP_TOKEN) > 14 else "set"

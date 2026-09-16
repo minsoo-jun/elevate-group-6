@@ -7,12 +7,12 @@ Implements:
 - Principle P7: Unified 18-field audit logging (both ALLOW and DENY)
 - Idempotency key management with persistent state store
 """
+
 from __future__ import annotations
 
 import datetime
 import hashlib
 import json
-import os
 import sqlite3
 import uuid
 from pathlib import Path
@@ -72,14 +72,20 @@ def record_idempotency(
 ) -> None:
     """Record completed operation in idempotency store."""
     conn = _get_db()
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     conn.execute(
         """
         INSERT OR REPLACE INTO idempotency_store
         (idempotency_key, actor_id, tool_name, status, response_json, created_at)
         VALUES (?, ?, ?, 'COMPLETED', ?, ?)
         """,
-        (idempotency_key, actor_id, tool_name, json.dumps(response, ensure_ascii=False), now),
+        (
+            idempotency_key,
+            actor_id,
+            tool_name,
+            json.dumps(response, ensure_ascii=False),
+            now,
+        ),
     )
     conn.commit()
     conn.close()
@@ -92,7 +98,7 @@ def log_audit_event(
     tool_name: str,
     target_system: str,
     action_type: str,  # "READ" | "WRITE"
-    decision: str,     # "ALLOW" | "DENY"
+    decision: str,  # "ALLOW" | "DENY"
     deny_reason: str | None = None,
     idempotency_key: str | None = None,
     confirmation_id: str | None = None,
@@ -101,7 +107,7 @@ def log_audit_event(
 ) -> str:
     """Write unified 18-field audit record (SDD §4.7) to artifacts/audit_logs.jsonl."""
     event_id = f"AUD-{uuid.uuid4().hex[:12].upper()}"
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
     record = {
         "event_id": event_id,
         "timestamp": now,

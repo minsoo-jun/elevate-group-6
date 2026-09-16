@@ -1058,9 +1058,9 @@ rag_tool = VertexAiRagRetrieval(
     config=VertexAiRagRetrievalConfig(
         corpus_name="projects/hr-agent-prod/locations/asia-northeast1/ragCorpora/hr-policy-corpus",
         top_k=5,
-        hybrid_search_alpha=0.5, # セマンティック 0.5 : キーワード 0.5 のハイブリッド比率 [要確定: 要チューニング]
+        hybrid_search_alpha=0.5,  # セマンティック 0.5 : キーワード 0.5 のハイブリッド比率 [要確定: 要チューニング]
         # 有効な承認済み文章のみを対象とするプレフィルタ
-        metadata_filter="approval_status == 'APPROVED' AND effective_date <= CURRENT_TIMESTAMP()" 
+        metadata_filter="approval_status == 'APPROVED' AND effective_date <= CURRENT_TIMESTAMP()",
     )
 )
 ```
@@ -1206,14 +1206,17 @@ RAGの検索フェーズと生成フェーズの双方が目標水準 (ベンチ
 
 全ツールサーバでの共通関心事（ガードレール、セキュアな認証認可、冪等性、ロギング）を確実かつ漏れなく実施するため、Python 抽象基底クラス `EnterpriseToolAdapter` を設計する。本クラスを必ず介して外部 API を呼び出すことで、**原則 P2「ツール層＝ポリシー実施点(PEP)」** をシステム的（構造的）に保証し、ビジネスガードレール (FR-1.1, FR-3.3, FR-4.3)、冪等性、およびアクセス制御 (FR-1.2, FR-1.5) をプロバブル（証明可能）な要件とする。
 
-**【EnterpriseToolAdapter 実装アーキテクチャ (Python / Abstact Base Class)】**
+**【EnterpriseToolAdapter 実装アーキテクチャ (Python / Abstract Base Class)】**
 
 ```python
 from abc import ABC, abstractmethod
 from typing import Any, Dict
 
+
 class EnterpriseToolAdapter(ABC):
-    def execute_tool(self, request: Dict[str, Any], context_user_id: str) -> Dict[str, Any]:
+    def execute_tool(
+        self, request: Dict[str, Any], context_user_id: str
+    ) -> Dict[str, Any]:
         # 1. 呼び出し元アイデンティティ (FR-1.2)
         self._verify_caller_identity(context_user_id)
         # 2. 認可スコープ判定 (FR-1.5)
@@ -1226,15 +1229,15 @@ class EnterpriseToolAdapter(ABC):
         idempotency_key = self._resolve_idempotency_key(request, context_user_id)
         if self._is_already_processed(idempotency_key):
             return self._get_cached_idempotent_response(idempotency_key)
-        
+
         # 6. 下流API呼出（リトライ・タイムアウト制御込）
         raw_response = self.call_downstream_api(request)
-        
+
         # 7. 応答の正規化
         normalized = self.normalize_response(raw_response)
         # 8. 監査レコード発行 (NFR-1.2)
         self._emit_audit_record(request, normalized)
-        
+
         return normalized
 
     @abstractmethod
@@ -1337,15 +1340,19 @@ MVPフェーズにおけるツールサーバ(WorkWeek, ServiceImmediately 連�
 ```python
 from google.adk.tools import FunctionTool
 
-def submit_leave_request_handler(leave_type: str, start_date: str, end_date: str, tool_context=None) -> str:
+
+def submit_leave_request_handler(
+    leave_type: str, start_date: str, end_date: str, tool_context=None
+) -> str:
     # ツール呼び出し前にUIへHITL確認プロンプトが表示される
     return "Leave Request Submitting..."
+
 
 submit_leave_tool = FunctionTool(
     submit_leave_request_handler,
     name="submit_leave_request",
     description="Submits a leave request to WorkWeek.",
-    require_confirmation=True # <- 必須 (P3)
+    require_confirmation=True,  # <- 必須 (P3)
 )
 ```
 
@@ -1388,12 +1395,13 @@ stateDiagram-v2
 from datetime import datetime, timezone, timedelta
 import re
 
+
 def validate_leave_request(request_payload: dict, employee_balance: int) -> None:
     # G-HCM-2: 時系列妥当性
     start_date = datetime.strptime(request_payload["start_date"], "%Y-%m-%d").date()
     end_date = datetime.strptime(request_payload["end_date"], "%Y-%m-%d").date()
-    today = datetime.now(timezone(timedelta(hours=9))).date() # JST
-    
+    today = datetime.now(timezone(timedelta(hours=9))).date()  # JST
+
     if start_date < today:
         raise ValueError("過去の日付になっているため、申請できません。")
     if end_date < start_date:
@@ -1402,7 +1410,9 @@ def validate_leave_request(request_payload: dict, employee_balance: int) -> None
     # G-HCM-1: 残高制限 (簡易計算)
     requested_days = (end_date - start_date).days + 1
     if requested_days > employee_balance:
-        raise ValueError(f"残高が不足しています。要求日数:{requested_days} > 残高:{employee_balance}")
+        raise ValueError(
+            f"残高が不足しています。要求日数:{requested_days} > 残高:{employee_balance}"
+        )
 ```
 
 ---
@@ -1634,32 +1644,44 @@ client = modelarmor_v1.ModelArmorClient()
 LOCATION = "asia-northeast1"
 PROJECT_ID = "hr-agent-prod"
 
+
 @before_model_callback
 def validate_inputs_model_armor(context, messages):
     # 最新のユーザーメッセージを抽出
     user_text = messages[-1].content
-    
+
     request = modelarmor_v1.SanitizeUserPromptRequest(
         name=f"projects/{PROJECT_ID}/locations/{LOCATION}/template/ma-tpl-input",
-        user_prompt_data=modelarmor_v1.DataItem(text=user_text)
+        user_prompt_data=modelarmor_v1.DataItem(text=user_text),
     )
     response = client.sanitize_user_prompt(request=request)
-    
-    if response.sanitization_result.action == modelarmor_v1.SanitizationResult.Action.BLOCK:
+
+    if (
+        response.sanitization_result.action
+        == modelarmor_v1.SanitizationResult.Action.BLOCK
+    ):
         # P5 フェイルクローズ原則に従い、モデル呼び出しを中断
-        context.abort(reason="入力にセキュリティ規約違反（インジェクション等の疑い）が検出されました。")
+        context.abort(
+            reason="入力にセキュリティ規約違反（インジェクション等の疑い）が検出されました。"
+        )
     return messages
+
 
 @after_model_callback
 def validate_outputs_model_armor(context, model_response):
     request = modelarmor_v1.SanitizeModelResponseRequest(
         name=f"projects/{PROJECT_ID}/locations/{LOCATION}/template/ma-tpl-output",
-        model_response_data=modelarmor_v1.DataItem(text=model_response.text)
+        model_response_data=modelarmor_v1.DataItem(text=model_response.text),
     )
     response = client.sanitize_model_response(request=request)
-    
-    if response.sanitization_result.action == modelarmor_v1.SanitizationResult.Action.BLOCK:
-        context.abort(reason="出力の生成中にセキュリティ要件を満たさない内容が検出されたため、表示を遮断しました。")
+
+    if (
+        response.sanitization_result.action
+        == modelarmor_v1.SanitizationResult.Action.BLOCK
+    ):
+        context.abort(
+            reason="出力の生成中にセキュリティ要件を満たさない内容が検出されたため、表示を遮断しました。"
+        )
     return model_response
 ```
 
@@ -1798,11 +1820,13 @@ def enforce_data_isolation(context, tool_request):
     caller_emp_id = context.auth.get("on_behalf_of")
     # ツール呼び出し引数に指定されたターゲットID
     requested_emp_id = tool_request.arguments.get("employee_id")
-    
+
     # 厳格なRBAC権限比較器の呼び出し
     if not is_authorized_to_access(caller_emp_id, requested_emp_id):
         # 権限外アクセスの場合はツール実行をLLMより下のプロキシ層で即座に拒否
-        context.abort(reason=f"許可されていないデータへのアクセス試行です (要求元: {caller_emp_id})")
+        context.abort(
+            reason=f"許可されていないデータへのアクセス試行です (要求元: {caller_emp_id})"
+        )
 ```
 
 #### 7.6.3 セッション隔離戦略 (原則 P4)

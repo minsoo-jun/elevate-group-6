@@ -27,6 +27,7 @@ Public API (stable - consumed by `app/agent.py` and `ui/server.py`):
     - list_policy_concepts(caller_id)
     - read_policy_concept(concept_id, caller_id)
 """
+
 from __future__ import annotations
 
 import re
@@ -44,7 +45,7 @@ from typing import Any
 # unchanged either way.
 # ---------------------------------------------------------------------------
 try:  # pragma: no cover - exercised implicitly by the running agent
-    from app.tools.adapter import log_audit_event  # type: ignore
+    from app.tools.adapter import log_audit_event
 except Exception:  # pragma: no cover - standalone / degraded import path
     try:
         import importlib.util as _importlib_util
@@ -161,7 +162,10 @@ def parse_policy_document(text: str | None = None) -> list[dict[str, Any]]:
                 hi = mid - 1
         return lo + 1
 
-    parents = [
+    # Annotated explicitly: inferred from the literal the value type would be
+    # `str | int`, which turns every later `start`/`end` comparison and
+    # subtraction into a type error.
+    parents: list[dict[str, Any]] = [
         {
             "number": m.group(1),
             "title": _clean_title(m.group(2)),
@@ -236,15 +240,15 @@ def parse_policy_document(text: str | None = None) -> list[dict[str, Any]]:
                 "section_id": f"Section {number}",
                 "number": number,
                 "title": title,
-                "parent_section_id": f"SECTION {parent_number}" if parent_number else "",
+                "parent_section_id": f"SECTION {parent_number}"
+                if parent_number
+                else "",
                 "parent_number": parent_number,
                 "parent_title": parent_title,
                 "content": content,
                 "line_start": line_start,
                 "line_end": line_end,
-                "citation_url": (
-                    f"file://{POLICY_DOC_PATH}#L{line_start}-L{line_end}"
-                ),
+                "citation_url": (f"file://{POLICY_DOC_PATH}#L{line_start}-L{line_end}"),
                 "anchor": _slug(f"{number}-{title}"),
             }
         )
@@ -463,13 +467,72 @@ _SYNONYMS: dict[str, list[str]] = {
 
 #: Low-signal English tokens removed from the direct-term list.
 _STOPWORDS = {
-    "the", "a", "an", "and", "or", "of", "to", "for", "in", "on", "at", "is",
-    "are", "was", "were", "be", "been", "can", "could", "do", "does", "did",
-    "how", "what", "when", "where", "which", "who", "why", "with", "my", "me",
-    "i", "we", "you", "your", "our", "it", "this", "that", "there", "if",
-    "about", "from", "by", "as", "any", "all", "not", "but", "have", "has",
-    "had", "should", "would", "will", "shall", "may", "much", "many", "get",
-    "please", "tell", "want", "need", "know",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "of",
+    "to",
+    "for",
+    "in",
+    "on",
+    "at",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "can",
+    "could",
+    "do",
+    "does",
+    "did",
+    "how",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "with",
+    "my",
+    "me",
+    "i",
+    "we",
+    "you",
+    "your",
+    "our",
+    "it",
+    "this",
+    "that",
+    "there",
+    "if",
+    "about",
+    "from",
+    "by",
+    "as",
+    "any",
+    "all",
+    "not",
+    "but",
+    "have",
+    "has",
+    "had",
+    "should",
+    "would",
+    "will",
+    "shall",
+    "may",
+    "much",
+    "many",
+    "get",
+    "please",
+    "tell",
+    "want",
+    "need",
+    "know",
 }
 
 _ASCII_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9'\-]*|\d+(?:[.,]\d+)*")
@@ -504,7 +567,9 @@ def _build_query_terms(query: str) -> list[tuple[str, float]]:
 
 
 def _count_exact(haystack: str, term: str) -> int:
-    return len(re.findall(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", haystack))
+    return len(
+        re.findall(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])", haystack)
+    )
 
 
 def _score_section(
@@ -673,7 +738,10 @@ def read_policy_concept(concept_id: str, caller_id: str = "EMP-1001") -> dict[st
     # 3. Title / parent-title substring.
     if not matched and query_norm:
         for s in sections:
-            if query_norm in s["title"].lower() or query_norm in s["parent_title"].lower():
+            if (
+                query_norm in s["title"].lower()
+                or query_norm in s["parent_title"].lower()
+            ):
                 push(s)
 
     # 4. Generated knowledge/ file lookup (`knowledge/section-5.4.md`).
@@ -681,7 +749,10 @@ def read_policy_concept(concept_id: str, caller_id: str = "EMP-1001") -> dict[st
         for md_file in sorted(KNOWLEDGE_DIR.rglob("*.md")):
             if md_file.name in ("log.md", "index.md"):
                 continue
-            if query_norm in md_file.stem.lower() or query_norm in md_file.parent.name.lower():
+            if (
+                query_norm in md_file.stem.lower()
+                or query_norm in md_file.parent.name.lower()
+            ):
                 file_text = md_file.read_text(encoding="utf-8")
                 key = md_file.stem
                 if key in seen:

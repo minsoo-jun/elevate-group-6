@@ -18,9 +18,11 @@ Guardrail order per write:
   7. ──► MCP call
   8. P7  audit record (ALLOW / DENY both persisted)
 """
+
 from __future__ import annotations
 
 import datetime
+import os
 import re
 from typing import Any
 
@@ -31,7 +33,7 @@ from app.tools.adapter import (
     log_audit_event,
     record_idempotency,
 )
-from app.tools.mcp_client import mcp_call_sync, mcp_enabled
+from app.tools.mcp_client import mcp_call_sync
 
 SERVER = "workweek"
 
@@ -52,8 +54,12 @@ LEAVE_TYPE_TO_MCP = {
 # Leave types governed by policy but not bookable through the WorkWeek MCP backend.
 OFFLINE_LEAVE_TYPES = {"childcare", "personal", "toil"}
 
-# Reference date used for deterministic notice-period arithmetic (Section 18.2).
-NOTICE_REFERENCE_DATE = datetime.date(2026, 9, 16)
+# Date arithmetic (Section 18.2 notice period, past-date rejection) resolves
+# "today" through `_today()` rather than a module-level constant. A constant
+# frozen at authoring time silently weakens the notice check as real time
+# advances -- by 2026-10-16 a 30-day-notice violation would look compliant.
+# Set HR_AGENT_TODAY=YYYY-MM-DD to pin the date for tests and demos.
+TODAY_OVERRIDE_ENV = "HR_AGENT_TODAY"
 
 # `get_employee_balances` returns a human-readable report, not JSON:
 #   "Employee EMP-791 Leave Balances:
@@ -69,7 +75,9 @@ _BALANCE_LINE_RE = re.compile(
 #   "Employee EMP-791 Personal Info:
 #    - Address: ...
 #    - Phone: ..."
-_INFO_LINE_RE = re.compile(r"^\s*-\s*(?P<key>[\w ]+?)\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE)
+_INFO_LINE_RE = re.compile(
+    r"^\s*-\s*(?P<key>[\w ]+?)\s*:\s*(?P<value>.+?)\s*$", re.MULTILINE
+)
 
 
 def _result_of(payload: Any) -> Any:
@@ -166,7 +174,9 @@ def _extract_balances(payload: Any) -> dict[str, float]:
         if match.group("used") is not None:
             balances[f"{leave_type}_used"] = _as_float(match.group("used"))
         if match.group("entitlement") is not None:
-            balances[f"{leave_type}_entitlement"] = _as_float(match.group("entitlement"))
+            balances[f"{leave_type}_entitlement"] = _as_float(
+                match.group("entitlement")
+            )
     return balances
 
 
@@ -195,7 +205,6 @@ def _extract_requests(payload: Any) -> list[dict[str, Any]]:
     return []
 
 
-
 def _parse_date(value: Any) -> datetime.date | None:
     if not value:
         return None
@@ -205,12 +214,27 @@ def _parse_date(value: Any) -> datetime.date | None:
         return None
 
 
+def _today() -> datetime.date:
+    """Resolve the reference date for all leave date arithmetic.
+
+    Single source of truth for "now" so the Section 18.2 notice-period check
+    and the past-date rejection can never drift apart. Set the
+    ``HR_AGENT_TODAY`` environment variable to ``YYYY-MM-DD`` to pin the date
+    for deterministic tests, evals and demos; otherwise the real current date
+    is used.
+    """
+    override = _parse_date(os.environ.get(TODAY_OVERRIDE_ENV))
+    return override if override is not None else datetime.date.today()
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # READ TOOLS
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def get_employee_profile(employee_id: str = "EMP-791", caller_id: str = "EMP-791") -> dict[str, Any]:
+def get_employee_profile(
+    employee_id: str = "EMP-791", caller_id: str = "EMP-791"
+) -> dict[str, Any]:
     """Retrieve an employee's personal contact details from WorkWeek (HCM system) via MCP.
 
     Enforces Principle P6 (RBAC Data Isolation): `caller_id` must match `employee_id`.
@@ -223,7 +247,9 @@ def get_employee_profile(employee_id: str = "EMP-791", caller_id: str = "EMP-791
     Returns:
         Employee profile including home address and phone number.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "get_employee_profile", "WorkWeek")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "get_employee_profile", "WorkWeek"
+    )
     if violation:
         return violation
 
@@ -231,7 +257,9 @@ def get_employee_profile(employee_id: str = "EMP-791", caller_id: str = "EMP-791
     if _mcp_failed(payload):
         return _degraded(payload, caller_id, "get_employee_profile")
     if _mcp_rejected(payload):
-        return _rejection(payload, caller_id, "get_employee_profile", "WORKWEEK_EMPLOYEE_NOT_FOUND")
+        return _rejection(
+            payload, caller_id, "get_employee_profile", "WORKWEEK_EMPLOYEE_NOT_FOUND"
+        )
 
     profile = _extract_personal_info(payload)
 
@@ -259,8 +287,9 @@ def get_employee_profile(employee_id: str = "EMP-791", caller_id: str = "EMP-791
     }
 
 
-
-def get_leave_balance(employee_id: str = "EMP-791", caller_id: str = "EMP-791") -> dict[str, Any]:
+def get_leave_balance(
+    employee_id: str = "EMP-791", caller_id: str = "EMP-791"
+) -> dict[str, Any]:
     """Retrieve an employee's remaining vacation and sick leave balances from WorkWeek via MCP.
 
     Enforces Principle P6 (RBAC Data Isolation): `caller_id` must match `employee_id`.
@@ -272,17 +301,25 @@ def get_leave_balance(employee_id: str = "EMP-791", caller_id: str = "EMP-791") 
     Returns:
         Remaining leave balances in days, the full leave request history, and applicable policy notes.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "get_leave_balance", "WorkWeek")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "get_leave_balance", "WorkWeek"
+    )
     if violation:
         return violation
 
-    balances_raw = mcp_call_sync(SERVER, "get_employee_balances", {"employee_id": employee_id})
+    balances_raw = mcp_call_sync(
+        SERVER, "get_employee_balances", {"employee_id": employee_id}
+    )
     if _mcp_failed(balances_raw):
         return _degraded(balances_raw, caller_id, "get_leave_balance")
     if _mcp_rejected(balances_raw):
-        return _rejection(balances_raw, caller_id, "get_leave_balance", "WORKWEEK_EMPLOYEE_NOT_FOUND")
+        return _rejection(
+            balances_raw, caller_id, "get_leave_balance", "WORKWEEK_EMPLOYEE_NOT_FOUND"
+        )
 
-    requests_raw = mcp_call_sync(SERVER, "get_leave_requests", {"employee_id": employee_id})
+    requests_raw = mcp_call_sync(
+        SERVER, "get_leave_requests", {"employee_id": employee_id}
+    )
     history = [] if _mcp_failed(requests_raw) else _extract_requests(requests_raw)
 
     audit_id = log_audit_event(
@@ -292,7 +329,10 @@ def get_leave_balance(employee_id: str = "EMP-791", caller_id: str = "EMP-791") 
         target_system="WorkWeek",
         action_type="READ",
         decision="ALLOW",
-        request_summary={"employee_id": employee_id, "via": "mcp:get_employee_balances"},
+        request_summary={
+            "employee_id": employee_id,
+            "via": "mcp:get_employee_balances",
+        },
     )
     return {
         "status": "SUCCESS",
@@ -316,7 +356,9 @@ def get_leave_balance(employee_id: str = "EMP-791", caller_id: str = "EMP-791") 
     }
 
 
-def get_leave_requests(employee_id: str = "EMP-791", caller_id: str = "EMP-791") -> dict[str, Any]:
+def get_leave_requests(
+    employee_id: str = "EMP-791", caller_id: str = "EMP-791"
+) -> dict[str, Any]:
     """Retrieve the full history of leave requests for an employee from WorkWeek via MCP.
 
     Args:
@@ -326,7 +368,9 @@ def get_leave_requests(employee_id: str = "EMP-791", caller_id: str = "EMP-791")
     Returns:
         List of leave requests with their dates, day counts, and statuses.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "get_leave_requests", "WorkWeek")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "get_leave_requests", "WorkWeek"
+    )
     if violation:
         return violation
 
@@ -384,7 +428,9 @@ def update_contact_info(
     Returns:
         Result dictionary indicating SUCCESS, CONFIRMATION_REQUIRED, or DENIED.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "update_contact_info", "WorkWeek")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "update_contact_info", "WorkWeek"
+    )
     if violation:
         return violation
 
@@ -393,12 +439,13 @@ def update_contact_info(
     if _mcp_failed(current):
         return _degraded(current, caller_id, "update_contact_info")
     if _mcp_rejected(current):
-        return _rejection(current, caller_id, "update_contact_info", "WORKWEEK_EMPLOYEE_NOT_FOUND")
+        return _rejection(
+            current, caller_id, "update_contact_info", "WORKWEEK_EMPLOYEE_NOT_FOUND"
+        )
 
     cur = _extract_personal_info(current)
     cur_address = cur.get("address", "")
     cur_phone = cur.get("phone", "")
-
 
     new_address = address.strip() or cur_address
     new_phone = phone.strip() or cur_phone
@@ -467,13 +514,19 @@ def update_contact_info(
             target_system="WorkWeek",
             action_type="WRITE_PROPOSAL",
             decision="ALLOW",
-            request_summary={"proposed_updates": updates, "status": "AWAITING_CONFIRMATION"},
+            request_summary={
+                "proposed_updates": updates,
+                "status": "AWAITING_CONFIRMATION",
+            },
         )
         return {
             "status": "CONFIRMATION_REQUIRED",
             "system": "WorkWeek",
             "message": "WorkWeek のレコードを更新する前に本人確認（HITL）が必要です。",
-            "proposed_changes": {"employee_id": employee_id, "fields_to_update": updates},
+            "proposed_changes": {
+                "employee_id": employee_id,
+                "fields_to_update": updates,
+            },
             "current_values": {"address": cur_address, "phone": cur_phone},
             "instruction_to_agent": (
                 "Present the proposed changes to the user and ask for explicit confirmation "
@@ -497,7 +550,9 @@ def update_contact_info(
     if _mcp_failed(payload):
         return _degraded(payload, caller_id, "update_contact_info")
     if _mcp_rejected(payload):
-        return _rejection(payload, caller_id, "update_contact_info", "WORKWEEK_UPDATE_REJECTED")
+        return _rejection(
+            payload, caller_id, "update_contact_info", "WORKWEEK_UPDATE_REJECTED"
+        )
 
     audit_id = log_audit_event(
         actor_id=caller_id,
@@ -540,6 +595,7 @@ def submit_leave_request(
     has_medical_certificate: bool = False,
     toil_cleared_by_manager: bool = False,
     is_emergency: bool = False,
+    accrued_toil_days: float = 0.0,
 ) -> dict[str, Any]:
     """Book vacation or sick leave in WorkWeek (HCM system) via MCP, behind deterministic guardrails.
 
@@ -557,7 +613,7 @@ def submit_leave_request(
     Args:
         employee_id: Employee ID submitting the leave (default: 'EMP-791').
         leave_type: 'annual' / 'vacation' (Paid Vacation), 'sick' (Sick Leave), 'childcare', 'personal', or 'toil'.
-        start_date: Leave start date in YYYY-MM-DD format.
+        start_date: Leave start date in YYYY-MM-DD format. Must not be in the past.
         end_date: Leave end date in YYYY-MM-DD format.
         days: Number of leave days requested (must be greater than 0).
         caller_id: Authenticated caller ID (default: 'EMP-791').
@@ -565,11 +621,16 @@ def submit_leave_request(
         has_medical_certificate: True if a Medical Certificate is available (required for sick leave over 2 days, Section 19.2).
         toil_cleared_by_manager: True if accrued TOIL has already been consumed or cleared with the manager (Section 25.3).
         is_emergency: True if the emergency exception applies to the Unpaid Personal Leave notice period (Section 18.2).
+        accrued_toil_days: Days of accrued Time-Off In Lieu the employee currently holds. TOIL is tracked
+            offline with the Line Manager and is NOT available from WorkWeek, so ask the user for this value
+            when booking Paid Vacation. Leave at 0.0 when the employee has no TOIL or has already cleared it.
 
     Returns:
         Structured result indicating SUCCESS, CONFIRMATION_REQUIRED, or DENIED with the specific guardrail code.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "submit_leave_request", "WorkWeek")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "submit_leave_request", "WorkWeek"
+    )
     if violation:
         return violation
 
@@ -628,7 +689,11 @@ def submit_leave_request(
             action_type="WRITE",
             decision="DENY",
             deny_reason="G-HCM-2_INVALID_DATE_RANGE",
-            request_summary={"start_date": start_date, "end_date": end_date, "days": days},
+            request_summary={
+                "start_date": start_date,
+                "end_date": end_date,
+                "days": days,
+            },
         )
         return {
             "status": "DENIED",
@@ -640,10 +705,38 @@ def submit_leave_request(
             "audit_event_id": audit_id,
         }
 
+    # ── G-HCM-2: start date must not be in the past ────────────────────────
+    # WorkWeek does not validate this server-side (its leave-type check fires
+    # first and masks everything behind it), so this layer is the only thing
+    # standing between a typo and a back-dated leave record.
+    today = _today()
+    if dt_start < today:
+        audit_id = log_audit_event(
+            actor_id=caller_id,
+            target_employee_id=employee_id,
+            tool_name="submit_leave_request",
+            target_system="WorkWeek",
+            action_type="WRITE",
+            decision="DENY",
+            deny_reason="G-HCM-2_START_DATE_IN_PAST",
+            request_summary={"start_date": start_date, "today": today.isoformat()},
+        )
+        return {
+            "status": "DENIED",
+            "code": "G-HCM-2_START_DATE_IN_PAST",
+            "message": (
+                f"Guardrail G-HCM-2 Violation: start_date ({start_date}) is in the past "
+                f"(today is {today.isoformat()}). Leave cannot be booked retroactively. "
+                f"If you need to record leave already taken, contact HR directly."
+            ),
+            "audit_event_id": audit_id,
+        }
+
     # ── Section 18.2 / G-HCM-2: unpaid personal leave notice period ────────
     if lt == "personal" and not is_emergency:
-        days_advance = (dt_start - NOTICE_REFERENCE_DATE).days
-        if 0 <= days_advance < 30:
+        # `dt_start >= today` is guaranteed by the past-date guardrail above.
+        days_advance = (dt_start - today).days
+        if days_advance < 30:
             audit_id = log_audit_event(
                 actor_id=caller_id,
                 target_employee_id=employee_id,
@@ -652,7 +745,10 @@ def submit_leave_request(
                 action_type="WRITE",
                 decision="DENY",
                 deny_reason="G-HCM-2_NOTICE_PERIOD_VIOLATION",
-                request_summary={"leave_type": "personal", "days_advance": days_advance},
+                request_summary={
+                    "leave_type": "personal",
+                    "days_advance": days_advance,
+                },
             )
             return {
                 "status": "DENIED",
@@ -726,7 +822,9 @@ def submit_leave_request(
     mcp_leave_type = LEAVE_TYPE_TO_MCP[lt]
 
     # ── G-HCM-1: live balance sufficiency (read from WorkWeek) ─────────────
-    balances_raw = mcp_call_sync(SERVER, "get_employee_balances", {"employee_id": employee_id})
+    balances_raw = mcp_call_sync(
+        SERVER, "get_employee_balances", {"employee_id": employee_id}
+    )
     if _mcp_failed(balances_raw):
         return _degraded(balances_raw, caller_id, "submit_leave_request")
 
@@ -743,7 +841,11 @@ def submit_leave_request(
             action_type="WRITE",
             decision="DENY",
             deny_reason="G-HCM-1_INSUFFICIENT_BALANCE",
-            request_summary={"leave_type": mcp_leave_type, "requested": days, "available": available},
+            request_summary={
+                "leave_type": mcp_leave_type,
+                "requested": days,
+                "available": available,
+            },
         )
         return {
             "status": "DENIED",
@@ -759,12 +861,17 @@ def submit_leave_request(
         }
 
     # ── Section 25.3 / G-HCM-4: TOIL must be consumed before Paid Vacation ─
+    # WorkWeek does not track TOIL: Section 25.3 states it is held offline with
+    # the Line Manager, and `get_employee_balances` only ever reports Vacation
+    # and Sick. The balance therefore has to be supplied by the caller
+    # (`accrued_toil_days`, which the agent asks the user for). The parsed
+    # report is still consulted as a fallback so the guardrail starts working
+    # automatically if WorkWeek ever grows a TOIL line.
     if mcp_leave_type.lower() == "vacation" and not toil_cleared_by_manager:
-        toil_balance = _as_float(
-            (balances_raw or {}).get("toil_remaining")
-            or (balances_raw or {}).get("toil")
-            or 0.0
-        )
+        toil_balance = _as_float(accrued_toil_days)
+        if toil_balance <= 0:
+            toil_balance = _as_float(balances.get("toil"))
+
         if toil_balance > 0:
             audit_id = log_audit_event(
                 actor_id=caller_id,
@@ -774,7 +881,10 @@ def submit_leave_request(
                 action_type="WRITE",
                 decision="DENY",
                 deny_reason="G-HCM-4_TOIL_MUST_BE_USED_FIRST",
-                request_summary={"leave_type": "vacation", "toil_balance": toil_balance},
+                request_summary={
+                    "leave_type": "vacation",
+                    "toil_balance": toil_balance,
+                },
             )
             return {
                 "status": "DENIED",
@@ -790,7 +900,9 @@ def submit_leave_request(
             }
 
     # ── G-HCM-3: overlap detection against live WorkWeek history ───────────
-    requests_raw = mcp_call_sync(SERVER, "get_leave_requests", {"employee_id": employee_id})
+    requests_raw = mcp_call_sync(
+        SERVER, "get_leave_requests", {"employee_id": employee_id}
+    )
     if not _mcp_failed(requests_raw):
         for existing in _extract_requests(requests_raw):
             status_val = str(existing.get("status", "")).upper()
@@ -893,7 +1005,9 @@ def submit_leave_request(
     if _mcp_failed(payload):
         return _degraded(payload, caller_id, "submit_leave_request")
     if _mcp_rejected(payload):
-        return _rejection(payload, caller_id, "submit_leave_request", "WORKWEEK_LEAVE_REJECTED")
+        return _rejection(
+            payload, caller_id, "submit_leave_request", "WORKWEEK_LEAVE_REJECTED"
+        )
 
     audit_id = log_audit_event(
         actor_id=caller_id,
@@ -943,7 +1057,9 @@ def cancel_leave_request(
     Returns:
         Result dictionary indicating SUCCESS, CONFIRMATION_REQUIRED, or DENIED.
     """
-    violation = enforce_data_isolation(caller_id, employee_id, "cancel_leave_request", "WorkWeek")
+    violation = enforce_data_isolation(
+        caller_id, employee_id, "cancel_leave_request", "WorkWeek"
+    )
     if violation:
         return violation
 
@@ -962,13 +1078,20 @@ def cancel_leave_request(
             target_system="WorkWeek",
             action_type="WRITE_PROPOSAL",
             decision="ALLOW",
-            request_summary={"request_id": request_id, "status": "AWAITING_CONFIRMATION"},
+            request_summary={
+                "request_id": request_id,
+                "status": "AWAITING_CONFIRMATION",
+            },
         )
         return {
             "status": "CONFIRMATION_REQUIRED",
             "system": "WorkWeek",
             "message": "WorkWeek の休暇申請を取り消す前に本人確認（HITL）が必要です。",
-            "proposed_changes": {"employee_id": employee_id, "request_id": request_id, "action": "cancel"},
+            "proposed_changes": {
+                "employee_id": employee_id,
+                "request_id": request_id,
+                "action": "cancel",
+            },
             "instruction_to_agent": (
                 "Confirm the cancellation with the user before calling cancel_leave_request "
                 "with user_confirmed=True."
@@ -976,12 +1099,16 @@ def cancel_leave_request(
         }
 
     payload = mcp_call_sync(
-        SERVER, "cancel_leave_request", {"employee_id": employee_id, "request_id": request_id}
+        SERVER,
+        "cancel_leave_request",
+        {"employee_id": employee_id, "request_id": request_id},
     )
     if _mcp_failed(payload):
         return _degraded(payload, caller_id, "cancel_leave_request")
     if _mcp_rejected(payload):
-        return _rejection(payload, caller_id, "cancel_leave_request", "WORKWEEK_CANCEL_REJECTED")
+        return _rejection(
+            payload, caller_id, "cancel_leave_request", "WORKWEEK_CANCEL_REJECTED"
+        )
 
     audit_id = log_audit_event(
         actor_id=caller_id,

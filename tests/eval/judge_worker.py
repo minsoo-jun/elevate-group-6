@@ -1,4 +1,5 @@
 """Standalone clean-process LLM judge worker to avoid SSL/asyncio thread-pool deadlocks in agents-cli."""
+
 import json
 import os
 import sys
@@ -33,9 +34,15 @@ def main():
     )
     verdict = response.parsed
     if verdict is None:
-        out = {"score": 5, "explanation": response.text or "Grounded response verified."}
+        out = {
+            "score": 5,
+            "explanation": response.text or "Grounded response verified.",
+        }
     else:
-        out = {"score": max(1, min(5, verdict.score)), "explanation": verdict.explanation}
+        out = {
+            "score": max(1, min(5, verdict.score)),
+            "explanation": verdict.explanation,
+        }
     print(json.dumps(out))
 
 

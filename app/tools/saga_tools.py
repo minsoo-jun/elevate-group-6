@@ -13,6 +13,7 @@ accepts `address` and `phone`. There is **no work-arrangement field** on this ba
 so the requested arrangement is carried into the ServiceImmediately ticket (where
 Section 5.4 eligibility is assessed) rather than persisted in the HCM record.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -61,7 +62,10 @@ def execute_remote_work_transition_saga(
         Structured Saga execution report showing final state (`SAGA_COMPLETED` or `SAGA_COMPENSATED_ROLLED_BACK`).
     """
     violation = enforce_data_isolation(
-        caller_id, employee_id, "execute_remote_work_transition_saga", "CloudWorkflowsSaga"
+        caller_id,
+        employee_id,
+        "execute_remote_work_transition_saga",
+        "CloudWorkflowsSaga",
     )
     if violation:
         return violation
@@ -78,8 +82,14 @@ def execute_remote_work_transition_saga(
             decision="ALLOW",
             request_summary={
                 "saga_id": saga_id,
-                "step1_hcm": {"address": new_address, "work_arrangement": new_work_arrangement},
-                "step2_itsm": {"category": "Facilities", "amount_usd": equipment_amount_usd},
+                "step1_hcm": {
+                    "address": new_address,
+                    "work_arrangement": new_work_arrangement,
+                },
+                "step2_itsm": {
+                    "category": "Facilities",
+                    "amount_usd": equipment_amount_usd,
+                },
             },
         )
         return {

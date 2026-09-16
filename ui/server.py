@@ -11,6 +11,7 @@ Backend of record: the **WorkWeek / ServiceImmediately MCP servers**. There is n
 local SQLite mirror of enterprise data any more — every state panel read goes out
 through `app.tools`, which is the same Policy Enforcement Point the agent uses.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -163,7 +164,10 @@ runner = Runner(
     auto_create_session=True,
 )
 
-api = FastAPI(title="hr-chat-ui", description="Elevate APAC HR & IT Concierge — Web Chat Experience Layer")
+api = FastAPI(
+    title="hr-chat-ui",
+    description="Elevate APAC HR & IT Concierge — Web Chat Experience Layer",
+)
 api.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -183,7 +187,11 @@ def _tool_meta(tool_name: str) -> dict[str, str]:
         "get_leave_requests",
     ):
         return {"system": "WorkWeek", "kind": "read", "domain": "hcm"}
-    if tool_name in ("update_contact_info", "submit_leave_request", "cancel_leave_request"):
+    if tool_name in (
+        "update_contact_info",
+        "submit_leave_request",
+        "cancel_leave_request",
+    ):
         return {"system": "WorkWeek", "kind": "write", "domain": "hcm"}
     if tool_name in ("get_ticket", "list_tickets"):
         return {"system": "ServiceImmediately", "kind": "read", "domain": "itsm"}
@@ -271,7 +279,11 @@ async def bootstrap() -> dict[str, Any]:
             "name": "hr_concierge",
             "model": "gemini-3.7-flash",
             "region": "asia-northeast1",
-            "systems": ["Policy Knowledge Base", "WorkWeek (HCM)", "ServiceImmediately (ITSM)"],
+            "systems": [
+                "Policy Knowledge Base",
+                "WorkWeek (HCM)",
+                "ServiceImmediately (ITSM)",
+            ],
             "backend": "MCP (live)",
         },
     }
@@ -331,7 +343,9 @@ async def chat(request: Request) -> StreamingResponse:
                         classification = _classify_result(result)
                         citations = _extract_citations(result)
                         for c in citations:
-                            if c["section_id"] not in [x["section_id"] for x in all_citations]:
+                            if c["section_id"] not in [
+                                x["section_id"] for x in all_citations
+                            ]:
                                 all_citations.append(c)
                         yield _sse(
                             "tool_result",
@@ -359,7 +373,9 @@ async def chat(request: Request) -> StreamingResponse:
                         await asyncio.sleep(0)
 
             answer = "".join(final_text_parts)
-            inline_sections = sorted({f"Section {m}" for m in CITATION_PATTERN.findall(answer)})
+            inline_sections = sorted(
+                {f"Section {m}" for m in CITATION_PATTERN.findall(answer)}
+            )
             yield _sse(
                 "done",
                 {
@@ -368,7 +384,7 @@ async def chat(request: Request) -> StreamingResponse:
                     "citations": all_citations,
                 },
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             yield _sse("error", {"message": f"{type(exc).__name__}: {exc}"})
 
     return StreamingResponse(
@@ -400,48 +416,234 @@ async def audit(limit: int = 40) -> dict[str, Any]:
     }
 
 
-@api.get("/api/state")
-async def enterprise_state(employee_id: str = "EMP-1001") -> dict[str, Any]:
-    """Return live WorkWeek (HCM) and ServiceImmediately (ITSM) state for the side panel."""
-    _init_hcm_db().close()
-    _init_itsm_db().close()
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
+# ══════════════════════════════════════════════════════════════════════════
+# Enterprise state panel (MCP-backed)
+# ══════════════════════════════════════════════════════════════════════════
 
-    profile_row = conn.execute(
-        "SELECT * FROM hcm_employees WHERE employee_id = ?", (employee_id,)
-    ).fetchone()
-    balance_row = conn.execute(
-        "SELECT * FROM hcm_leave_balances WHERE employee_id = ?", (employee_id,)
-    ).fetchone()
-    leave_rows = conn.execute(
-        "SELECT request_id, leave_type, start_date, end_date, days, status FROM hcm_leave_requests WHERE employee_id = ? ORDER BY created_at DESC",
-        (employee_id,),
-    ).fetchall()
-    ticket_rows = conn.execute(
-        "SELECT ticket_id, category, priority, status, title, amount_usd FROM itsm_tickets WHERE employee_id = ? ORDER BY created_at DESC",
-        (employee_id,),
-    ).fetchall()
-    conn.close()
+# The mock host throttles bursts with HTTP 429 and one panel refresh costs five
+# MCP round-trips, so identical refreshes inside this window are served from a
+# process-local snapshot. `?refresh=1` forces a fresh read.
+STATE_CACHE_TTL_SECONDS = float(os.getenv("UI_STATE_CACHE_TTL_SECONDS", "12"))
+_STATE_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
+# Human-readable panel note for each non-SUCCESS tool status.
+_PANEL_FALLBACK = {
+    "SERVICE_UNAVAILABLE": "リモートシステムに接続できません。",
+    "DENIED": "このレコードへのアクセスは拒否されました。",
+    "ERROR": "データを取得できませんでした。",
+}
+
+
+def _panel_status(result: dict[str, Any]) -> dict[str, Any]:
+    """Summarize a tool result for the UI panel without ever raising."""
+    status = str(result.get("status", "ERROR"))
     return {
-        "profile": dict(profile_row) if profile_row else None,
-        "balances": dict(balance_row) if balance_row else None,
-        "leave_requests": [dict(r) for r in leave_rows],
-        "tickets": [dict(r) for r in ticket_rows],
+        "status": status,
+        "ok": status == "SUCCESS",
+        "code": result.get("code"),
+        "message": result.get("message") or _PANEL_FALLBACK.get(status),
     }
 
 
+def _normalize_leave_request(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a WorkWeek leave request for the panel.
+
+    WorkWeek returns `{request_id, employee_id, start_date, end_date, leave_type,
+    days}` — there is no `status` field, and every returned request is an
+    approved (non-cancelled) booking, so we label it as such.
+    """
+    return {
+        "request_id": raw.get("request_id"),
+        "leave_type": str(raw.get("leave_type") or ""),
+        "start_date": raw.get("start_date"),
+        "end_date": raw.get("end_date"),
+        "days": raw.get("days"),
+        "status": raw.get("status") or "Approved",
+    }
+
+
+def _normalize_ticket(raw: dict[str, Any]) -> dict[str, Any]:
+    """Shape a ServiceImmediately ticket for the panel."""
+    return {
+        "ticket_id": raw.get("ticket_id"),
+        "title": raw.get("short_description") or raw.get("description") or "",
+        "category": raw.get("category") or "",
+        # Already a label such as "3 - Moderate" on this backend.
+        "priority": raw.get("priority") or "",
+        "status": raw.get("status") or "",
+        "assignment_group": raw.get("assignment_group") or "",
+        "assigned_to": raw.get("assigned_to") or "",
+        "created_at": raw.get("created_at") or "",
+    }
+
+
+def _collect_state(employee_id: str) -> dict[str, Any]:
+    """Blocking MCP fan-out used by `/api/state` (run off the event loop)."""
+    directory = DIRECTORY.get(employee_id, {})
+
+    profile_res = get_employee_profile(employee_id=employee_id, caller_id=employee_id)
+    balance_res = get_leave_balance(employee_id=employee_id, caller_id=employee_id)
+    requests_res = get_leave_requests(employee_id=employee_id, caller_id=employee_id)
+    tickets_res = list_tickets(employee_id=employee_id, caller_id=employee_id)
+
+    profile: dict[str, Any] | None = None
+    if profile_res.get("status") == "SUCCESS":
+        mcp_profile = profile_res.get("profile", {}) or {}
+        profile = {
+            "employee_id": employee_id,
+            # WorkWeek exposes only address and phone over MCP; the remaining
+            # attributes are local display metadata, flagged as such for honesty.
+            "full_name": directory.get("name", employee_id),
+            "job_title": directory.get("title", ""),
+            "department": directory.get("department", ""),
+            "work_arrangement": directory.get("work_arrangement", ""),
+            "address": mcp_profile.get("address", ""),
+            "phone": mcp_profile.get("phone", ""),
+            "directory_fields_are_local": True,
+        }
+
+    balances: dict[str, Any] | None = None
+    if balance_res.get("status") == "SUCCESS":
+        balances = balance_res.get("balances") or {}
+
+    leave_requests: list[dict[str, Any]] = []
+    if requests_res.get("status") == "SUCCESS":
+        leave_requests = [
+            _normalize_leave_request(r) for r in requests_res.get("requests", [])
+        ]
+    elif balance_res.get("status") == "SUCCESS":
+        # `get_leave_balance` already carries the history; use it as a fallback
+        # so a throttled second read does not blank the panel.
+        leave_requests = [
+            _normalize_leave_request(r)
+            for r in balance_res.get("existing_requests", [])
+        ]
+
+    tickets: list[dict[str, Any]] = []
+    if tickets_res.get("status") == "SUCCESS":
+        tickets = [_normalize_ticket(t) for t in tickets_res.get("tickets", [])]
+
+    panels = {
+        "profile": _panel_status(profile_res),
+        "balances": _panel_status(balance_res),
+        "leave_requests": _panel_status(requests_res),
+        "tickets": _panel_status(tickets_res),
+    }
+
+    return {
+        "employee_id": employee_id,
+        "source": "mcp",
+        "is_primary_identity": employee_id == PRIMARY_EMPLOYEE_ID,
+        "profile": profile,
+        "balances": balances,
+        "leave_requests": leave_requests,
+        "tickets": tickets,
+        "panels": panels,
+        "degraded": any(p["status"] == "SERVICE_UNAVAILABLE" for p in panels.values()),
+        "denied": any(p["status"] == "DENIED" for p in panels.values()),
+        "fetched_at": time.time(),
+    }
+
+
+@api.get("/api/state")
+async def enterprise_state(
+    employee_id: str = PRIMARY_EMPLOYEE_ID, refresh: int = 0
+) -> dict[str, Any]:
+    """Return live WorkWeek (HCM) and ServiceImmediately (ITSM) state for the side panel.
+
+    Reads go through the same `app.tools` Policy Enforcement Point the agent uses,
+    so a DENIED (P6 RBAC) or SERVICE_UNAVAILABLE (MCP transport fault) outcome is
+    reported as panel metadata instead of a 500.
+    """
+    cached = _STATE_CACHE.get(employee_id)
+    if (
+        not refresh
+        and cached
+        and (time.monotonic() - cached[0]) < STATE_CACHE_TTL_SECONDS
+    ):
+        return {**cached[1], "cached": True}
+
+    try:
+        payload = await asyncio.to_thread(_collect_state, employee_id)
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc}"
+        unavailable = {
+            "status": "SERVICE_UNAVAILABLE",
+            "ok": False,
+            "code": "UI_STATE_FAILED",
+            "message": detail,
+        }
+        return {
+            "employee_id": employee_id,
+            "source": "mcp",
+            "is_primary_identity": employee_id == PRIMARY_EMPLOYEE_ID,
+            "profile": None,
+            "balances": None,
+            "leave_requests": [],
+            "tickets": [],
+            "panels": {
+                k: dict(unavailable)
+                for k in ("profile", "balances", "leave_requests", "tickets")
+            },
+            "degraded": True,
+            "denied": False,
+            "fetched_at": time.time(),
+        }
+
+    _STATE_CACHE[employee_id] = (time.monotonic(), payload)
+    return {**payload, "cached": False}
+
+
 @api.post("/api/reset")
-async def reset_state() -> dict[str, str]:
-    """Reset the demo enterprise state database and audit log to a pristine baseline."""
-    if DB_PATH.exists():
-        DB_PATH.unlink()
+async def reset_state() -> dict[str, Any]:
+    """Clear LOCAL demo state only.
+
+    WorkWeek and ServiceImmediately are shared live systems reached over MCP and
+    cannot be reset from here — leave balances, leave requests and tickets stay
+    exactly as they are. This endpoint only clears what this process owns:
+    the in-memory ADK sessions, the audit log, the idempotency store and the
+    cached state snapshot.
+    """
+    cleared: list[str] = []
+
     if AUDIT_LOG_PATH.exists():
         AUDIT_LOG_PATH.unlink()
-    _init_hcm_db().close()
-    _init_itsm_db().close()
-    return {"status": "RESET_COMPLETE"}
+        cleared.append("audit_log")
+
+    # `DB_PATH` no longer mirrors enterprise data — it only holds the P2
+    # idempotency store written by `app.tools.adapter`.
+    if DB_PATH.exists():
+        try:
+            conn = sqlite3.connect(str(DB_PATH))
+            conn.execute("DELETE FROM idempotency_store")
+            conn.commit()
+            conn.close()
+            cleared.append("idempotency_store")
+        except sqlite3.Error:
+            DB_PATH.unlink()
+            cleared.append("idempotency_store")
+
+    # `InMemorySessionService` has no public bulk-delete API; its state lives in
+    # three plain dicts, so dropping those is the supported-in-practice reset.
+    for attr in ("sessions", "user_state", "app_state"):
+        store = getattr(session_service, attr, None)
+        if isinstance(store, dict):
+            store.clear()
+    cleared.append("sessions")
+
+    _STATE_CACHE.clear()
+    cleared.append("state_cache")
+
+    return {
+        "status": "LOCAL_RESET_COMPLETE",
+        "cleared": cleared,
+        "remote_systems_reset": False,
+        "message": (
+            "ローカルのデモ状態（セッション・監査ログ・冪等性ストア）のみを初期化しました。"
+            "WorkWeek / ServiceImmediately は共有のライブシステムのため、"
+            "リモートシステムのデータはリセットされません。"
+        ),
+    }
 
 
 @api.get("/api/policy")
